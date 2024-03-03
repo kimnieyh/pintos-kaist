@@ -15,7 +15,8 @@ void sema_down (struct semaphore *);
 bool sema_try_down (struct semaphore *);
 void sema_up (struct semaphore *);
 void sema_self_test (void);
-
+bool less_awake(const struct list_elem *a, const struct list_elem *b, void *aux);
+bool greater_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 /* Lock. */
 struct lock {
 	struct thread *holder;      /* Thread holding lock (for debugging). */

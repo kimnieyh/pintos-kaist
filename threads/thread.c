@@ -227,7 +227,6 @@ thread_block (void) {
 	thread_current ()->status = THREAD_BLOCKED;
 	schedule ();
 }
-
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)
@@ -244,7 +243,8 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	list_insert_ordered(&ready_list,&t->elem,greater_priority,NULL);
+	// list_push_front (&ready_list, &t->elem);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -321,13 +321,13 @@ thread_yield (void) {
 void thread_sleep(int64_t end_ticks,int64_t ticks) {
     struct thread *curr = thread_current();
     enum intr_level old_level;
-
+	global_ticks = ticks;
     ASSERT(!intr_context());
 	curr->awake_ticks = end_ticks;
     old_level = intr_disable();
     if (curr != idle_thread) {
-		global_ticks = ticks;
-		while(global_ticks < end_ticks){
+		//printf(" down thread name : %s , end_ticks : %zu, priority : %zu \n",curr->name,curr->awake_ticks,curr->priority);
+		while(global_ticks <= end_ticks){
 			if(global_ticks >= end_ticks) {
 				sema_up(&sema);
 				break;
@@ -340,7 +340,7 @@ void thread_sleep(int64_t end_ticks,int64_t ticks) {
 
 
 void thread_awake(int64_t ticks){
-	global_ticks = ticks;
+	global_ticks ++;
 	if (sema.value == 0 )
 		sema_up(&sema);
 }
