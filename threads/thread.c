@@ -27,12 +27,14 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct semaphore sema;
 
 /* Idle thread. */
 static struct thread *idle_thread;
 
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;
+static int is_init = 0;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
@@ -41,14 +43,14 @@ static struct lock tid_lock;
 static struct list destruction_req;
 
 /* Statistics. */
-static long long idle_ticks;    /* # of timer ticks spent idle. */
+static long long idle_ticks;    /* # of timer ticks spent idle   . */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
 
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
-
+static long long global_ticks;
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -106,6 +108,7 @@ thread_init (void) {
 	lgdt (&gdt_ds);
 
 	/* Init the globla thread context */
+	sema_init (&sema,0);
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
@@ -115,6 +118,7 @@ thread_init (void) {
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
+	is_init = 1;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -307,8 +311,41 @@ thread_yield (void) {
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
+/* 1. 현재 쓰레드가 idle thread (아무 작업을 수행하지 않을 때 실행되는 쓰레드)
+	 가 아닌 경우 호출한 쓰레드 상태를 BLOCKED 로 바꾼다.
+	 2. 일어날 때 까지 로컬 틱 값을 저장한다. 
+	 3. 필요하면 전역 틱 값을 업데이트 한다. 
+	 4. 다음 쓰레드를 스케쥴 한다.
+	 5. 쓰레드 조작 시 인터럽트 비활성화 ! 
+	*/
+void thread_sleep(int64_t end_ticks,int64_t ticks) {
+    struct thread *curr = thread_current();
+    enum intr_level old_level;
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
+    ASSERT(!intr_context());
+	curr->awake_ticks = end_ticks;
+    old_level = intr_disable();
+    if (curr != idle_thread) {
+		global_ticks = ticks;
+		while(global_ticks < end_ticks){
+			if(global_ticks >= end_ticks) {
+				sema_up(&sema);
+				break;
+			}
+        	sema_down(&sema);
+		}
+    }
+    intr_set_level(old_level);
+}
+
+
+void thread_awake(int64_t ticks){
+	global_ticks = ticks;
+	if (sema.value == 0 )
+		sema_up(&sema);
+}
+
+/* Sets the current thread's priority to 0N0E0W0_0P000RIORITY. */
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;

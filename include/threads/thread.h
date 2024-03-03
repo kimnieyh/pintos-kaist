@@ -91,9 +91,10 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
-
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	
+	int64_t awake_ticks;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -132,6 +133,8 @@ const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
+void thread_sleep (int64_t end_ticks,int64_t ticks);
+void thread_awake (int64_t ticks);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
