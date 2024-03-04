@@ -11,11 +11,20 @@ Executing 'mlfqs-nice-10':
 (mlfqs-nice-10) Starting 10 threads...
 (mlfqs-nice-10) Starting threads took 1 ticks.
 (mlfqs-nice-10) Sleeping 40 seconds to let threads run, please wait...
-Kernel PANIC at ../../threads/thread.c:308 in thread_yield(): assertion `!intr_context ()' failed.
-Call stack: 0x80042134c4 0x8004207053 0x8004209c20 0x800420720a 0x800420d292 0x8004208941 0x8004208d5f 0x80042073d0.
-The `backtrace' program can make call stacks useful.
-Read "Backtraces" in the "Debugging Tools" chapter
-of the Pintos documentation for more information.
-Timer: 524 ticks
-Thread: 497 idle ticks, 27 kernel ticks, 0 user ticks
-Console: 
+(mlfqs-nice-10) Thread 0 received 300 ticks.
+(mlfqs-nice-10) Thread 1 received 300 ticks.
+(mlfqs-nice-10) Thread 2 received 299 ticks.
+(mlfqs-nice-10) Thread 3 received 299 ticks.
+(mlfqs-nice-10) Thread 4 received 300 ticks.
+(mlfqs-nice-10) Thread 5 received 297 ticks.
+(mlfqs-nice-10) Thread 6 received 299 ticks.
+(mlfqs-nice-10) Thread 7 received 300 ticks.
+(mlfqs-nice-10) Thread 8 received 301 ticks.
+(mlfqs-nice-10) Thread 9 received 300 ticks.
+(mlfqs-nice-10) end
+Execution of 'mlfqs-nice-10' complete.
+Timer: 4049 ticks
+Thread: 1000 idle ticks, 3050 kernel ticks, 0 user ticks
+Console: 1043 characters output
+Keyboard: 0 keys pressed
+Powering off...

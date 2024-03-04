@@ -71,6 +71,16 @@ bool greater_priority(const struct list_elem *a, const struct list_elem *b, void
     struct thread *thread_b = list_entry(b, struct thread, elem);
     return thread_a->priority > thread_b->priority;
 }
+bool greater_priority_cond (const struct list_elem *a, const struct list_elem *b, void *aux) 
+{
+   struct semaphore sema_a = list_entry(a,struct semaphore_elem,elem)->semaphore;
+   struct semaphore sema_b = list_entry(a,struct semaphore_elem,elem)->semaphore;
+   struct list_elem *elem_a = list_begin(&sema_a.waiters);
+   struct list_elem *elem_b = list_begin(&sema_b.waiters);
+   struct thread *thread_a = list_entry(elem_a, struct thread, elem);
+   struct thread *thread_b = list_entry(elem_b, struct thread, elem);
+   return thread_a->priority > thread_b->priority;
+}
 void
 sema_down (struct semaphore *sema) {
 	enum intr_level old_level;
@@ -306,7 +316,9 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_push_back (&cond->waiters, &waiter.elem);
+   list_insert_ordered(&cond->waiters,&waiter.elem,
+		greater_priority_cond,NULL); 
+	//list_push_back (&cond->waiters, &waiter.elem);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);

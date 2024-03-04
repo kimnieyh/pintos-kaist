@@ -4,18 +4,19 @@ Kernel command line: -q -mlfqs run mlfqs-fair-2
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  130,867,200 loops/s.
+Calibrating timer...  40,908,800 loops/s.
 Boot complete.
 Executing 'mlfqs-fair-2':
 (mlfqs-fair-2) begin
 (mlfqs-fair-2) Starting 2 threads...
 (mlfqs-fair-2) Starting threads took 0 ticks.
 (mlfqs-fair-2) Sleeping 40 seconds to let threads run, please wait...
-Kernel PANIC at ../../threads/thread.c:308 in thread_yield(): assertion `!intr_context ()' failed.
-Call stack: 0x80042134c4 0x8004207053 0x8004209c20 0x800420720a 0x800420d292 0x8004208941 0x8004208d5f 0x80042073d0.
-The `backtrace' program can make call stacks useful.
-Read "Backtraces" in the "Debugging Tools" chapter
-of the Pintos documentation for more information.
-Timer: 526 ticks
-Thread: 498 idle ticks, 28 kernel ticks, 0 user ticks
-Console: 
+(mlfqs-fair-2) Thread 0 received 1493 ticks.
+(mlfqs-fair-2) Thread 1 received 1497 ticks.
+(mlfqs-fair-2) end
+Execution of 'mlfqs-fair-2' complete.
+Timer: 4034 ticks
+Thread: 1000 idle ticks, 3034 kernel ticks, 0 user ticks
+Console: 673 characters output
+Keyboard: 0 keys pressed
+Powering off...
