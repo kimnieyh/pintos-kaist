@@ -318,33 +318,37 @@ thread_yield (void) {
 	 4. 다음 쓰레드를 스케쥴 한다.
 	 5. 쓰레드 조작 시 인터럽트 비활성화 ! 
 	*/
-void thread_sleep(int64_t end_ticks,int64_t ticks) {
+void thread_sleep(int64_t end_ticks, int64_t ticks) {
     struct thread *curr = thread_current();
     enum intr_level old_level;
-	global_ticks = ticks;
     ASSERT(!intr_context());
 	curr->awake_ticks = end_ticks;
     old_level = intr_disable();
     if (curr != idle_thread) {
 		//printf(" down thread name : %s , end_ticks : %zu, priority : %zu \n",curr->name,curr->awake_ticks,curr->priority);
-		while(global_ticks <= end_ticks){
-			if(global_ticks >= end_ticks) {
-				sema_up(&sema);
-				break;
-			}
-        	sema_down(&sema);
+		while(global_ticks < end_ticks){
+			sema_down(&sema);
 		}
     }
+	
     intr_set_level(old_level);
 }
 
 
 void thread_awake(int64_t ticks){
-	global_ticks ++;
-	if (sema.value == 0 )
-		sema_up(&sema);
+	global_ticks = ticks;
+	struct list_elem *e = list_begin(&sema.waiters);
+	while(e != list_end(&sema.waiters))
+	{
+		if(list_entry(e,struct thread,elem)->awake_ticks <= ticks)
+		{
+			sema_up(&sema);
+			e = list_begin(&sema.waiters);
+			continue;
+		}
+		e = list_next(e);
+	}
 }
-
 /* Sets the current thread's priority to 0N0E0W0_0P000RIORITY. */
 void
 thread_set_priority (int new_priority) {
