@@ -60,7 +60,11 @@ sema_init (struct semaphore *sema, unsigned value) {
 bool less_awake(const struct list_elem *a, const struct list_elem *b, void *aux) {
     struct thread *thread_a = list_entry(a, struct thread, elem);
     struct thread *thread_b = list_entry(b, struct thread, elem);
-    return thread_a->awake_ticks < thread_b->awake_ticks;
+
+    if(thread_a->awake_ticks == thread_b->awake_ticks)
+      return thread_a->priority > thread_b->priority;
+    else
+      return thread_a->awake_ticks < thread_b->awake_ticks;
 }
 bool greater_priority(const struct list_elem *a, const struct list_elem *b, void *aux) {
     struct thread *thread_a = list_entry(a, struct thread, elem);
@@ -116,16 +120,23 @@ sema_try_down (struct semaphore *sema) {
 void
 sema_up (struct semaphore *sema) {
 	enum intr_level old_level;
-
+   struct thread *t = list_entry(list_begin(&sema->waiters),struct thread, elem);
 	ASSERT (sema != NULL);
-
 	old_level = intr_disable ();
-
+   sema->value++;
 	if (!list_empty (&sema->waiters))
+   {
+      // t = list_entry(list_max(&sema->waiters,greater_priority,NULL),struct thread,elem);
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
-					struct thread, elem));
+					struct thread, elem)); 
+      //printf("waiter thread (%s) pri: %d, upper thread (%s) pri: %d\n",
+      //t->name, t->priority, thread_current()->name, thread_current()->priority);
+      
+      if(t->priority > thread_current()->priority && !intr_context()){
+         thread_yield();
+      }
+   }
 
-	sema->value++;
 	intr_set_level (old_level);
 }
 

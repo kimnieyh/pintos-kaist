@@ -353,16 +353,13 @@ void thread_awake(int64_t ticks){
 /* Sets the current thread's priority to 0N0E0W0_0P000RIORITY. */
 void
 thread_set_priority (int new_priority) {
-	enum intr_level old_level;
 	struct thread *t = thread_current();
 	struct thread *ready_first = list_entry(list_begin(&ready_list),struct thread, elem); 
 	
 	t->priority = new_priority;
 	if(ready_first->priority > new_priority){
-		old_level = intr_disable();
 		thread_yield();
 	}
-	intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
