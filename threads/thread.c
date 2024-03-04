@@ -211,6 +211,8 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
+	if (t->priority > thread_current()->priority)
+		thread_yield();
 	return tid;
 }
 
@@ -307,7 +309,7 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list,&curr->elem,greater_priority,NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -318,7 +320,7 @@ thread_yield (void) {
 	 4. 다음 쓰레드를 스케쥴 한다.
 	 5. 쓰레드 조작 시 인터럽트 비활성화 ! 
 	*/
-void thread_sleep(int64_t end_ticks, int64_t ticks) {
+void thread_sleep(int64_t end_ticks) {
     struct thread *curr = thread_current();
     enum intr_level old_level;
     ASSERT(!intr_context());
@@ -330,7 +332,6 @@ void thread_sleep(int64_t end_ticks, int64_t ticks) {
 			sema_down(&sema);
 		}
     }
-	
     intr_set_level(old_level);
 }
 
@@ -352,7 +353,16 @@ void thread_awake(int64_t ticks){
 /* Sets the current thread's priority to 0N0E0W0_0P000RIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+	enum intr_level old_level;
+	struct thread *t = thread_current();
+	struct thread *ready_first = list_entry(list_begin(&ready_list),struct thread, elem); 
+	
+	t->priority = new_priority;
+	if(ready_first->priority > new_priority){
+		old_level = intr_disable();
+		thread_yield();
+	}
+	intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
