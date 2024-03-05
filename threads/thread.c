@@ -211,7 +211,7 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
-	if (t->priority > thread_current()->priority)
+	if (t->priority > thread_get_priority())
 		thread_yield();
 	return tid;
 }
@@ -363,8 +363,13 @@ thread_set_priority (int new_priority) {
 }
 
 /* Returns the current thread's priority. */
+// 우선순위 기부가 존재하는 경우, 더 높은(기부된) 우선순위를 반환
 int
 thread_get_priority (void) {
+	if(!list_empty(&thread_current()->lock_list))
+		return list_entry(list_begin(&list_entry(
+				list_begin(&thread_current()->lock_list)
+				,struct lock_elem,elem)->lock->semaphore.waiters),struct thread,elem)->priority;
 	return thread_current ()->priority;
 }
 
@@ -450,8 +455,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	ASSERT (t != NULL);
 	ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
 	ASSERT (name != NULL);
-
 	memset (t, 0, sizeof *t);
+	list_init(&t->lock_list); // todo 확인
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);

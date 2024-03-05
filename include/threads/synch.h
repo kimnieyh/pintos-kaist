@@ -10,6 +10,10 @@ struct semaphore {
 	struct list waiters;        /* List of waiting threads. */
 };
 
+struct lock_elem {
+   struct list_elem elem;
+   struct lock *lock;
+};
 void sema_init (struct semaphore *, unsigned value);
 void sema_down (struct semaphore *);
 bool sema_try_down (struct semaphore *);

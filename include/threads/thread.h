@@ -95,6 +95,7 @@ struct thread {
 	struct list_elem elem;              /* List element. */
 	
 	int64_t awake_ticks;
+	struct list lock_list;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
