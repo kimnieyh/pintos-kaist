@@ -40,9 +40,10 @@ struct semaphore_elem {
 struct list_elem *
 find_elem_by_lock(struct list *list,struct lock *lock){
 	struct list_elem * e;
-	for (e = list_begin (list); e != list_end (list); e = list_next (e))
-		if (list_entry(e,struct lock_elem,elem)->lock == lock)
+	for (e = list_begin (list); e != list_end (list); e = list_next (e)){
+      if (list_entry(e,struct lock_elem,elem)->lock == lock)
 			return e;
+   }
    return NULL;
 }
 
@@ -158,6 +159,7 @@ sema_up (struct semaphore *sema) {
    sema->value++;
 	if (!list_empty (&sema->waiters))
    {
+      list_sort(&sema->waiters,less_awake,NULL);
       // t = list_entry(list_max(&sema->waiters,greater_priority,NULL),struct thread,elem);
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem)); 
@@ -245,7 +247,7 @@ lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
-   if(lock->holder != NULL)
+   if(lock->holder != NULL && is_in_list(&lock->holder->lock_list,find_elem_by_lock(&lock->holder->lock_list,lock)) == 0)
    {
       elem.lock = lock;
       list_insert_ordered(&lock->holder->lock_list,&elem.elem,greater_priority_lock,NULL);
