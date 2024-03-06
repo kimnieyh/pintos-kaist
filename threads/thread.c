@@ -367,18 +367,14 @@ thread_set_priority (int new_priority) {
 // 우선순위 기부가 존재하는 경우, 더 높은(기부된) 우선순위를 반환
 int
 thread_get_priority (void) {
-	if(!list_empty(&thread_current()->lock_list))
-		return list_entry(list_begin(&list_entry(
-				list_begin(&thread_current()->lock_list)
-				,struct lock_elem,elem)->lock->semaphore.waiters),struct thread,elem)->priority;
-	return thread_current ()->priority;
+	return get_priority(thread_current());
 }
 int
 get_priority (struct thread *t) {
 	if(!list_empty(&t->lock_list))
-		return list_entry(list_begin(&list_entry(
+		return get_priority(list_entry(list_begin(&list_entry(
 				list_begin(&t->lock_list)
-				,struct lock_elem,elem)->lock->semaphore.waiters),struct thread,elem)->priority;
+				,struct lock_elem,elem)->lock->semaphore.waiters),struct thread,elem));
 	return t->priority;
 }
 
