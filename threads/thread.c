@@ -210,7 +210,8 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
-
+	//printf("t->name :(%s), current->name :(%s)\n",t->name,thread_current()->name);
+	//printf("t->priority :(%d), current->priority :(%d) \n",t->priority,thread_get_priority());
 	if (t->priority > thread_get_priority())
 		thread_yield();
 	return tid;
@@ -371,6 +372,14 @@ thread_get_priority (void) {
 				list_begin(&thread_current()->lock_list)
 				,struct lock_elem,elem)->lock->semaphore.waiters),struct thread,elem)->priority;
 	return thread_current ()->priority;
+}
+int
+get_priority (struct thread *t) {
+	if(!list_empty(&t->lock_list))
+		return list_entry(list_begin(&list_entry(
+				list_begin(&t->lock_list)
+				,struct lock_elem,elem)->lock->semaphore.waiters),struct thread,elem)->priority;
+	return t->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -595,7 +604,6 @@ static void
 schedule (void) {
 	struct thread *curr = running_thread ();
 	struct thread *next = next_thread_to_run ();
-
 	ASSERT (intr_get_level () == INTR_OFF);
 	ASSERT (curr->status != THREAD_RUNNING);
 	ASSERT (is_thread (next));
