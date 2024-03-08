@@ -20,6 +20,40 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
+#define f 1<<14
+// Convert n to fixed point: n * f
+#define TO_FIXED_POINT(n, f) ((n) * (f))
+
+// Convert x to integer (rounding toward zero): x / f
+#define TO_INTEGER_TOWARD_ZERO(x, f) ((x) / (f))
+
+// Convert x to integer (rounding to nearest):
+// (x + f / 2) / f if x >= 0, (x - f / 2) / f if x <= 0
+#define TO_INTEGER_NEAREST(x, f) (((x) >= 0) ? (((x) + ((f) / 2)) / (f)) : (((x) - ((f) / 2)) / (f)))
+
+// Add x and y: x + y
+#define ADD(x, y) ((x) + (y))
+
+// Subtract y from x: x - y
+#define SUBTRACT(x, y) ((x) - (y))
+
+// Add x and n: x + n * f
+#define ADD_FIXED_POINT(x, n, f) ((x) + TO_FIXED_POINT(n, f))
+
+// Subtract n from x: x - n * f
+#define SUBTRACT_FIXED_POINT(x, n, f) ((x) - TO_FIXED_POINT(n, f))
+
+// Multiply x by y: ((int64_t) x) * y / f
+#define MULTIPLY(x, y, f) (((int64_t)(x)) * (y) / (f))
+
+// Multiply x by n: x * n
+#define MULTIPLY_BY_INT(x, n) ((x) * (n))
+
+// Divide x by y: ((int64_t) x) * f / y
+#define DIVIDE(x, y, f) (((int64_t)(x)) * (f) / (y))
+
+// Divide x by n: x / n
+#define DIVIDE_BY_INT(x, n) ((x) / (n))
 /* Random value for basic thread
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
@@ -28,7 +62,7 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 static struct semaphore sema;
-
+static int32_t load_avg;
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -377,6 +411,12 @@ get_priority (struct thread *t) {
 				,struct lock_elem,elem)->lock->semaphore.waiters),struct thread,elem));
 	return t->priority;
 }
+int thread_ready_list() {
+	if (thread_current()!=idle_thread)
+		return list_size(&ready_list)+1;
+	else 
+		return list_size(&ready_list);
+}
 
 /* Sets the current thread's nice value to NICE. */
 void
@@ -395,7 +435,7 @@ thread_get_nice (void) {
 int
 thread_get_load_avg (void) {
 	/* TODO: Your implementation goes here */
-	return 0;
+	return TO_INTEGER_NEAREST(MULTIPLY_BY_INT(load_avg,100),f);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -645,3 +685,6 @@ allocate_tid (void) {
 
 	return tid;
 }
+void update_load_avg(void) {
+	load_avg = ADD(MULTIPLY(DIVIDE(TO_FIXED_POINT(59,f),TO_FIXED_POINT(60,f),f),load_avg,f),MULTIPLY_BY_INT(DIVIDE(TO_FIXED_POINT(1,f),TO_FIXED_POINT(60,f),f),thread_ready_list()));
+} 
