@@ -93,9 +93,11 @@ struct thread {
 	int priority;                       /* Priority. */
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
-	
+	struct list_elem all_elem;
 	int64_t awake_ticks;
 	struct list lock_list;
+	int nice;
+	int32_t recent_cpu;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -147,5 +149,7 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 void update_load_avg(void);
 void do_iret (struct intr_frame *tf);
-
+void update_recent_cpu(void);
+void decay_recent_cpu(void);
+void set_decay(struct thread *t);
 #endif /* threads/thread.h */
