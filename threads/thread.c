@@ -744,7 +744,7 @@ void decay_recent_cpu(void) {
 	
 }
 void set_priority(struct thread *t){
-	t->priority = PRI_MAX- TO_INTEGER_NEAREST(DIVIDE_BY_INT(t->recent_cpu,4),f)/ - (t->nice *2);
+	t->priority = PRI_MAX- TO_INTEGER_NEAREST(DIVIDE_BY_INT(t->recent_cpu,4),f) - (t->nice *2);
 }
 void update_recent_cpu(void) {
 	struct thread *t = thread_current();
