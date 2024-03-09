@@ -152,4 +152,6 @@ void do_iret (struct intr_frame *tf);
 void update_recent_cpu(void);
 void decay_recent_cpu(void);
 void set_decay(struct thread *t);
+void set_priority(struct thread *t);
+void update_priority(void);
 #endif /* threads/thread.h */

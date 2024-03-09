@@ -434,7 +434,10 @@ int thread_ready_list() {
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice UNUSED) {
-	thread_current()->nice = nice;
+	struct thread *t = thread_current();
+	t->nice = nice;
+	set_priority(t);
+	thread_yield();
 }
 
 /* Returns the current thread's nice value. */
@@ -741,7 +744,7 @@ void decay_recent_cpu(void) {
 	
 }
 void set_priority(struct thread *t){
-	t->priority = PRI_MAX-(t->recent_cpu/4) - (t->nice *2);
+	t->priority = PRI_MAX- TO_INTEGER_NEAREST(DIVIDE_BY_INT(t->recent_cpu,4),f)/ - (t->nice *2);
 }
 void update_recent_cpu(void) {
 	struct thread *t = thread_current();
