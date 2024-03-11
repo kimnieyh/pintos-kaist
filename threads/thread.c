@@ -245,7 +245,6 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
-	enum intr_level old_level;
 	
 	if(thread_current())
 		t->recent_cpu = thread_current()->recent_cpu;
@@ -374,11 +373,14 @@ void thread_sleep(int64_t end_ticks) {
 	curr->awake_ticks = end_ticks;
     old_level = intr_disable();
     if (curr != idle_thread) {
-		//printf(" down thread name : %s , end_ticks : %zu, priority : %zu \n",curr->name,curr->awake_ticks,curr->priority);
-		while(global_ticks < end_ticks){
+		if(thread_mlfqs){
+			while(global_ticks < end_ticks)
+				sema_down_sleep(&sema);
+		}else{
 			sema_down_sleep(&sema);
+			thread_yield();
 		}
-    }
+	}
     intr_set_level(old_level);
 }
 
@@ -386,16 +388,21 @@ void thread_sleep(int64_t end_ticks) {
 void thread_awake(int64_t ticks){
 	global_ticks = ticks;
 	struct list_elem *e = list_begin(&sema.waiters);
+	enum intr_level old_level;
+	// old_level = intr_disable();
 	while(e != list_end(&sema.waiters))
 	{
 		if(list_entry(e,struct thread,elem)->awake_ticks <= ticks)
-		{
+		{	
 			sema_up_awake(&sema);
 			e = list_begin(&sema.waiters);
 			continue;
+		}else{
+			break;
 		}
-		e = list_next(e);
 	}
+	
+	// intr_set_level(old_level);
 }
 /* Sets the current thread's priority to 0N0E0W0_0P000RIORITY. */
 void
