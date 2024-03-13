@@ -175,7 +175,7 @@ process_exec (void *f_name) {
 
 	/* We first kill the current context */
 	process_cleanup ();
-
+	
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
@@ -183,7 +183,7 @@ process_exec (void *f_name) {
 	palloc_free_page (file_name);
 	if (!success)
 		return -1;
-
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -204,6 +204,9 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	while(1){
+
+	}
 	return -1;
 }
 
@@ -316,6 +319,37 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
 		bool writable);
 
+void place_stack(char *args[128],int *args_size,int cnt,struct intr_frame *if_){
+	int sum_size = 0;
+	uintptr_t ptr_list[cnt];
+	int padding_size;
+	
+	for(int i = cnt-1; i !=-1; i-- ){
+		if_->rsp -= args_size[i];
+		ptr_list[i] = if_->rsp;
+		sum_size += args_size[i];
+		memcpy(if_->rsp,args[i],args_size[i]);
+	}
+
+	padding_size = 8-(sum_size%8);
+
+	if_->rsp -= padding_size;
+	memset(if_->rsp,0,padding_size);
+
+	for (int i = cnt; i >=0; i--) 
+	{ 
+		if_->rsp -= 8; 
+		if (i == cnt) { 
+			memset(if_->rsp, 0, sizeof(char *));
+		} else { 
+			memcpy(if_->rsp,&ptr_list[i], sizeof(char *));
+		}
+	}
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, sizeof(void *));
+	if_->R.rsi = if_->rsp+8;
+	if_->R.rdi = cnt;
+}
 /* Loads an ELF executable from FILE_NAME into the current thread.
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
@@ -328,7 +362,21 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
+	char *s = file_name;
 
+	char *token, *save_ptr;
+	char *args[128];  // 문자열을 가리키는 포인터 배열
+	int cnt = 0;
+	int args_size[128];
+
+	for (token = strtok_r(s, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+	{
+		args[cnt] = token;
+		args_size[cnt] = strlen(token) + 1;
+		cnt++;
+	}
+
+	file_name = args[0];
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -413,9 +461,12 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-
+	
+	//todo: stack에 저장하기  주소 타입 : uintptr_t
+	
 	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	 * TODO: Implement argument passing (sFee project2/argument_passing.html). */
+	place_stack(args,args_size,cnt,if_);
 
 	success = true;
 
@@ -539,7 +590,6 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;
 	bool success = false;
-
 	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
 	if (kpage != NULL) {
 		success = install_page (((uint8_t *) USER_STACK) - PGSIZE, kpage, true);
@@ -628,7 +678,6 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
