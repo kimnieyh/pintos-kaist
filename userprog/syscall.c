@@ -58,7 +58,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		break;
 	case SYS_FORK:
 		break;
-	case SYS_EXEC:
+	case SYS_EXEC:  
 		f->R.rax = exec(f->R.rdi);
 		break;
 	case SYS_WAIT:
@@ -114,48 +114,74 @@ void exit (int status)// NO_RETURN
 	printf("%s: exit(%d)\n",curr->name,curr->exit_status);
 	thread_exit();
 }
+
 pid_t fork (const char *thread_name){
 	if(thread_current()->name != thread_name)
 		return thread_create(thread_name,PRI_DEFAULT,pml4_for_each,thread_current());
 	else
 		return 0;
 }
+
 int exec (const char *file){
 	return process_exec(file);
 }
+
 int wait (pid_t child_tid){
 	return process_wait(child_tid);
 }
+
 int create_fd(struct file *file){
 	struct thread *curr = thread_current();
-	if(curr->fd_idx <2){
-		curr->fd_idx = 2;
+	if(curr->fd_idx <64){
 		curr->files[curr->fd_idx] = file;
-		return curr->fd_idx;
-	}else if (curr->fd_idx <16){
 		curr->fd_idx ++;
-		curr->files[curr->fd_idx] = file;
-		return curr->fd_idx;
+		return curr->fd_idx +2;
 	}
+	printf("fail\n");
 	return -1;
 }
+
 struct file* find_file_by_fd(int fd){
 	struct thread *curr = thread_current();
 	if (fd < 0 || fd > 16)
 		return NULL;
 	return curr->files[fd];
 }
+
+void del_fd(int fd){
+	struct thread *curr = thread_current();
+	
+	if(fd == NULL)
+		return;
+	
+	if(fd == curr->fd_idx -1)
+	{
+		curr->files[fd] = NULL;
+		curr->fd_idx --;
+	}else{
+		for(int i = fd; i < curr->fd_idx ; i++){
+			curr->files[i] = curr->files[i+1];
+		}
+		curr->fd_idx --;
+	}
+	 
+}
+
 bool create (const char *file, unsigned initial_size){
 	if(strlen(file) >= 511)
 		return 0;
 	return filesys_create(file,initial_size);
 }
+
 bool remove (const char *file){
 	return filesys_remove(file);
 }
 
 int open (const char *file){
-	if(strcmp(file,"")== 0){
+	if(file == NULL ){
+		exit(-1);
+	}
+	if(strcmp(file,"")== 0 ){
 		return -1;
 	}
 	struct file *open_file = filesys_open(file);
@@ -166,26 +192,34 @@ int open (const char *file){
 		return create_fd(open_file);
 	}
 }
+
 int filesize (int fd){
 	struct file *file = find_file_by_fd(fd);
 	if(file == NULL)
 		return -1;
 	return file_length(file);
 }
+
 int read (int fd, void *buffer, unsigned length){
 	struct file *file = find_file_by_fd(fd);
-	if (file == NULL)
+	if (file == NULL){
 		return -1;
+	}
 	return file_read(file,buffer,length);
 }
+
 int write (int fd, const void *buffer, unsigned length){
 	putbuf(buffer,length);
 	return fd;
 }
+
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
+
 void close (int fd){
-	
+	struct file *file = find_file_by_fd(fd);
+	file_close(file);
+	del_fd(fd);
 }
 
 int dup2(int oldfd, int newfd);

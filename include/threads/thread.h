@@ -27,7 +27,6 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-#define FDCOUNT_LIMIT 64
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -96,7 +95,7 @@ struct thread {
 	struct list_elem all_elem;
 	int64_t awake_ticks;
 	struct list lock_list;
-	struct file **files;
+	struct file *files[64];
 	int fd_idx;
 	int nice;
 	int32_t recent_cpu;
