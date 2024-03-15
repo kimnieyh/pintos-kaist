@@ -55,28 +55,51 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		break;
 	case SYS_EXIT:
 		exit(f->R.rdi);
+		break;
 	case SYS_FORK:
-		// fork();
+		break;
 	case SYS_EXEC:
+		f->R.rax = exec(f->R.rdi);
+		break;
 	case SYS_WAIT:
 		wait(f->R.rdi);
+		break;
 	case SYS_CREATE:
-		create(f->R.rdi,f->R.rsi);
+		if(!check_addr(f->R.rdi)){
+			exit(-1);
+		}
+		if(f->R.rdi ==NULL || strcmp(f->R.rdi,"")== 0)
+			exit(-1);
+		if (!create(f->R.rdi,f->R.rsi))
+			f->R.rax = false;
+		else 
+			f->R.rax = true;
+		break;
 	case SYS_REMOVE:
 		remove(f->R.rdi);
+		break;
 	case SYS_OPEN:
+		f->R.rax = open(f->R.rdi);
+		break;
 	case SYS_FILESIZE:
+		f->R.rax = filesize(f->R.rdi);
+		break;
 	case SYS_READ:
+		f->R.rax = read(f->R.rdi,f->R.rsi,f->R.rdx);
+		break;
 	case SYS_WRITE:
 		write(f->R.rdi,f->R.rsi,f->R.rdx);
+		break;
 	case SYS_SEEK:
+		break;
 	case SYS_TELL:
+		break;
 	case SYS_CLOSE:
 		close(f->R.rdi);
+		break;
 	default:
 		break;
 	}
-	
 }
 
 void halt (void) //NO_RETURN
@@ -87,6 +110,8 @@ void halt (void) //NO_RETURN
 void exit (int status)// NO_RETURN
 {
 	thread_current()->exit_status = status;
+	struct thread *curr = thread_current ();
+	printf("%s: exit(%d)\n",curr->name,curr->exit_status);
 	thread_exit();
 }
 pid_t fork (const char *thread_name){
@@ -96,23 +121,62 @@ pid_t fork (const char *thread_name){
 		return 0;
 }
 int exec (const char *file){
-
+	return process_exec(file);
 }
 int wait (pid_t child_tid){
 	return process_wait(child_tid);
 }
+int create_fd(struct file *file){
+	struct thread *curr = thread_current();
+	if(curr->fd_idx <2){
+		curr->fd_idx = 2;
+		curr->files[curr->fd_idx] = file;
+		return curr->fd_idx;
+	}else if (curr->fd_idx <16){
+		curr->fd_idx ++;
+		curr->files[curr->fd_idx] = file;
+		return curr->fd_idx;
+	}
+	return -1;
+}
+struct file* find_file_by_fd(int fd){
+	struct thread *curr = thread_current();
+	if (fd < 0 || fd > 16)
+		return NULL;
+	return curr->files[fd];
+}
 bool create (const char *file, unsigned initial_size){
+	if(strlen(file) >= 511)
+		return 0;
 	return filesys_create(file,initial_size);
 }
 bool remove (const char *file){
 	return filesys_remove(file);
 }
-int open (const char *file){
-	struct file *open_file = filesys_open(file);
-}
-int filesize (int fd);
-int read (int fd, void *buffer, unsigned length){
 
+int open (const char *file){
+	if(strcmp(file,"")== 0){
+		return -1;
+	}
+	struct file *open_file = filesys_open(file);
+
+	if(open_file == NULL){
+		return -1;
+	}else {
+		return create_fd(open_file);
+	}
+}
+int filesize (int fd){
+	struct file *file = find_file_by_fd(fd);
+	if(file == NULL)
+		return -1;
+	return file_length(file);
+}
+int read (int fd, void *buffer, unsigned length){
+	struct file *file = find_file_by_fd(fd);
+	if (file == NULL)
+		return -1;
+	return file_read(file,buffer,length);
 }
 int write (int fd, const void *buffer, unsigned length){
 	putbuf(buffer,length);
