@@ -7,6 +7,8 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -57,6 +59,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		exit(f->R.rdi);
 		break;
 	case SYS_FORK:
+		f->R.rax = fork(f->R.rdi);
 		break;
 	case SYS_EXEC:  
 		f->R.rax = exec(f->R.rdi);
@@ -79,16 +82,21 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		remove(f->R.rdi);
 		break;
 	case SYS_OPEN:
+		if(!check_addr(f->R.rdi))
+			exit(-1);
 		f->R.rax = open(f->R.rdi);
+
 		break;
 	case SYS_FILESIZE:
 		f->R.rax = filesize(f->R.rdi);
 		break;
 	case SYS_READ:
+		if(!check_addr(f->R.rdi))
+			exit(-1);
 		f->R.rax = read(f->R.rdi,f->R.rsi,f->R.rdx);
 		break;
 	case SYS_WRITE:
-		write(f->R.rdi,f->R.rsi,f->R.rdx);
+		f->R.rax = write(f->R.rdi,f->R.rsi,f->R.rdx);
 		break;
 	case SYS_SEEK:
 		break;
@@ -116,10 +124,7 @@ void exit (int status)// NO_RETURN
 }
 
 pid_t fork (const char *thread_name){
-	if(thread_current()->name != thread_name)
-		return thread_create(thread_name,PRI_DEFAULT,pml4_for_each,thread_current());
-	else
-		return 0;
+	return process_fork(thread_name,thread_current()->tf);
 }
 
 int exec (const char *file){
@@ -133,28 +138,27 @@ int wait (pid_t child_tid){
 int create_fd(struct file *file){
 	struct thread *curr = thread_current();
 	if(curr->fd_idx <64){
-		curr->files[curr->fd_idx] = file;
+		int idx = curr->fd_idx;
+		curr->files[idx] = file;
 		curr->fd_idx ++;
-		return curr->fd_idx +2;
+		return idx+2;
 	}
-	printf("fail\n");
 	return -1;
 }
 
 struct file* find_file_by_fd(int fd){
+	fd -=2;
+	if(fd >64 || fd <0)
+		exit(-1);
 	struct thread *curr = thread_current();
-	if (fd < 0 || fd > 16)
-		return NULL;
 	return curr->files[fd];
 }
 
 void del_fd(int fd){
+	fd -= 2;
 	struct thread *curr = thread_current();
 	
-	if(fd == NULL)
-		return;
-	
-	if(fd == curr->fd_idx -1)
+	if(fd == curr->fd_idx-1)
 	{
 		curr->files[fd] = NULL;
 		curr->fd_idx --;
@@ -163,8 +167,7 @@ void del_fd(int fd){
 			curr->files[i] = curr->files[i+1];
 		}
 		curr->fd_idx --;
-	}
-	 
+	}	 
 }
 
 bool create (const char *file, unsigned initial_size){
@@ -185,11 +188,11 @@ int open (const char *file){
 		return -1;
 	}
 	struct file *open_file = filesys_open(file);
-
 	if(open_file == NULL){
 		return -1;
 	}else {
-		return create_fd(open_file);
+		int fd = create_fd(open_file);
+		return fd;
 	}
 }
 
@@ -209,8 +212,15 @@ int read (int fd, void *buffer, unsigned length){
 }
 
 int write (int fd, const void *buffer, unsigned length){
-	putbuf(buffer,length);
-	return fd;
+	if (fd == 1) 
+		putbuf(buffer,length);
+	else
+	{
+		if(check_addr(buffer) == 0)
+			exit(-1);
+		struct file *file = find_file_by_fd(fd);
+		return file_write(file,buffer,length);
+	}
 }
 
 void seek (int fd, unsigned position);
@@ -218,6 +228,8 @@ unsigned tell (int fd);
 
 void close (int fd){
 	struct file *file = find_file_by_fd(fd);
+	if(file == NULL)
+		return;
 	file_close(file);
 	del_fd(fd);
 }
