@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -26,11 +27,11 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
-// static struct semaphore wait_sema;
+static struct semaphore wait_sema;
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
-	// sema_init(&wait_sema);
+	
 	struct thread *current = thread_current ();
 }
 
@@ -44,7 +45,7 @@ process_create_initd (const char *file_name) {
 	char *fn_copy;
 	tid_t tid;
 	char **ptr;
-
+	sema_init(&wait_sema,0);
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
 	fn_copy = palloc_get_page (0);
@@ -102,11 +103,11 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
 	// 1. 메모리 할당
-	newpage = palloc_get_page(PAL_USER);
+	// newpage = palloc_get_page(PAL_USER);
 	// 2. PAL_USER 확인 flag로 
 	// 3. 페이지 초기화
 	// 4. 페이지 주소 저장 -- NEW PAGE에 ! 
-	strlcpy(newpage,va,PGSIZE);
+	// strlcpy(newpage,va,PGSIZE);
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
@@ -212,12 +213,28 @@ process_exec (void *f_name) {
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
+bool child_list_check(tid_t child_tid){
+	struct list_elem *e;
+	struct thread *t = thread_current();
+
+	for (e = list_begin (&t->child_list); e != list_end (&t->child_list);
+			e = list_next (e))
+	{
+		struct thread *c = list_entry(e,struct thread,child_elem);
+		if(c->tid == child_tid)
+			return true;
+	}
+	return false;
+}
+
 int
 process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	timer_sleep(4);
+	// timer_sleep(4);
+	while(child_list_check(child_tid)) // 현재 쓰레드의 자식 리스트에 child_tid가 있을때! 
+		sema_down(&wait_sema);
 	return -1;
 }
 
@@ -228,6 +245,10 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+	if(thread_current())
+	{
+	list_remove(&thread_current()->child_elem);
+	sema_up(&wait_sema);}
 	process_cleanup ();
 }
 

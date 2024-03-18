@@ -99,6 +99,9 @@ struct thread {
 	int fd_idx;
 	int nice;
 	int32_t recent_cpu;
+	struct list child_list;
+	struct list_elem child_elem;
+	// struct thread *parent;
 	
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

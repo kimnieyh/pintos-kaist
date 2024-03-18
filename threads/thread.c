@@ -247,7 +247,10 @@ thread_create (const char *name, int priority,
 	t->tf.eflags = FLAG_IF;
 	
 	if(thread_current())
-		t->recent_cpu = thread_current()->recent_cpu;
+	{	t->recent_cpu = thread_current()->recent_cpu;
+		// t->parent = thread_current();
+		list_push_back(&thread_current()->child_list,&t->child_elem);
+	}
 	else 
 		t->recent_cpu = 0;
 	list_push_back(&all_list,&t->all_elem);
@@ -523,6 +526,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	ASSERT (name != NULL);
 	memset (t, 0, sizeof *t);
 	list_init(&t->lock_list);
+	list_init(&t->child_list);
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
