@@ -26,10 +26,11 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
-
+// static struct semaphore wait_sema;
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
+	// sema_init(&wait_sema);
 	struct thread *current = thread_current ();
 }
 
@@ -100,7 +101,12 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
-
+	// 1. 메모리 할당
+	newpage = palloc_get_page(PAL_USER);
+	// 2. PAL_USER 확인 flag로 
+	// 3. 페이지 초기화
+	// 4. 페이지 주소 저장 -- NEW PAGE에 ! 
+	strlcpy(newpage,va,PGSIZE);
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
@@ -150,6 +156,7 @@ __do_fork (void *aux) {
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
+	// file_duplicate();
 	process_init ();
 
 	/* Finally, switch to the newly created process. */
@@ -163,7 +170,12 @@ error:
  * Returns -1 on fail. */
 int
 process_exec (void *f_name) {
-	char *file_name = f_name;
+	char *fn_copy;
+	fn_copy = palloc_get_page (0);
+	if (fn_copy == NULL)
+		return TID_ERROR;
+	strlcpy (fn_copy, f_name, PGSIZE);
+	char *file_name = fn_copy;
 	bool success;
 
 	/* We cannot use the intr_frame in the thread structure.
@@ -177,6 +189,7 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 	/* And then load the binary */
+	
 	success = load (file_name, &_if);
 
 	/* If load failed, quit. */
@@ -364,6 +377,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	char *args[128];  // 문자열을 가리키는 포인터 배열
 	int cnt = 0;
 	int args_size[128];
+	
 	for (token = strtok_r(s, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
 	{
 		args[cnt] = token;
@@ -374,11 +388,13 @@ load (const char *file_name, struct intr_frame *if_) {
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
-	process_activate (thread_current ());
 
+	process_activate (thread_current ());
 	/* Open executable file. */
+
 	file = filesys_open (file_name);
 	if (file == NULL) {
+		
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
@@ -456,7 +472,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	if_->rip = ehdr.e_entry;
 	
 	place_stack(args,args_size,cnt,if_);
-
 	success = true;
 
 done:
