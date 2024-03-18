@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -99,6 +100,8 @@ struct thread {
 	int fd_idx;
 	int nice;
 	int32_t recent_cpu;
+	struct semaphore wait_sema;
+	struct thread *parent;
 	struct list child_list;
 	struct list_elem child_elem;
 	// struct thread *parent;

@@ -245,10 +245,10 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
-	
 	if(thread_current())
 	{	t->recent_cpu = thread_current()->recent_cpu;
 		// t->parent = thread_current();
+		t->parent = thread_current();
 		list_push_back(&thread_current()->child_list,&t->child_elem);
 	}
 	else 
@@ -527,6 +527,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	memset (t, 0, sizeof *t);
 	list_init(&t->lock_list);
 	list_init(&t->child_list);
+	sema_init(&t->wait_sema,0);
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);

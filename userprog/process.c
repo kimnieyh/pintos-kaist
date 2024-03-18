@@ -27,7 +27,6 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
-static struct semaphore wait_sema;
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
@@ -45,7 +44,6 @@ process_create_initd (const char *file_name) {
 	char *fn_copy;
 	tid_t tid;
 	char **ptr;
-	sema_init(&wait_sema,0);
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
 	fn_copy = palloc_get_page (0);
@@ -157,7 +155,11 @@ __do_fork (void *aux) {
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
-	// file_duplicate();
+	list_push_back(&parent->child_list,&current->child_elem);
+	process_wait(current->tid);
+	//todo fd table 복제 file_duplicate();
+	
+
 	process_init ();
 
 	/* Finally, switch to the newly created process. */
@@ -233,8 +235,8 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 	// timer_sleep(4);
-	while(child_list_check(child_tid)) // 현재 쓰레드의 자식 리스트에 child_tid가 있을때! 
-		sema_down(&wait_sema);
+	if(child_list_check(child_tid)) // 현재 쓰레드의 자식 리스트에 child_tid가 있을때! 
+		sema_down(&thread_current()->wait_sema);
 	return -1;
 }
 
@@ -245,10 +247,10 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	if(thread_current())
-	{
-	list_remove(&thread_current()->child_elem);
-	sema_up(&wait_sema);}
+	if(thread_current()){
+		list_remove(&thread_current()->child_elem);
+		sema_up(&thread_current()->parent->wait_sema);
+	}
 	process_cleanup ();
 }
 
