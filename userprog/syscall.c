@@ -203,7 +203,7 @@ int read (int fd, void *buffer, unsigned length){
 	check_addr(buffer);
 	int bytes_read = 0;
 	char *ptr = (char *)buffer;
-	if (fd == 1){
+	if (fd == 0){
 		for(int i = 0 ; i < length; i++){
 			char ch = input_getc();
 			if (ch == '\n')
@@ -247,8 +247,9 @@ int write (int fd, const void *buffer, unsigned length){
 }
 // 파일 편집 위치 변경
 void seek (int fd, unsigned position){
+	if(fd <3)
+		return;
 	struct file *file = find_file_by_fd(fd);
-	check_addr(file);
 	if(file== NULL)
 		return;
 	file_seek(file,position);
