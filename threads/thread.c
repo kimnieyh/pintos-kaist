@@ -245,17 +245,17 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+	t->parent = thread_current();
+	
 	if(thread_current())
-	{	t->recent_cpu = thread_current()->recent_cpu;
-		// t->parent = thread_current();
-		t->parent = thread_current();
-		list_push_back(&thread_current()->child_list,&t->child_elem);
-	}
+		t->recent_cpu = thread_current()->recent_cpu;
 	else 
 		t->recent_cpu = 0;
 	list_push_back(&all_list,&t->all_elem);
-
-	
+	list_push_back(&thread_current()->child_list,&t->child_elem);
+	t->files = palloc_get_page(PAL_ZERO);
+	if(t->files == NULL)
+		return TID_ERROR;
 	/* Add to run queue. */
 	thread_unblock (t);
 	
@@ -523,8 +523,6 @@ init_thread (struct thread *t, const char *name, int priority) {
 	ASSERT (name != NULL);
 	memset (t, 0, sizeof *t);
 	list_init(&t->lock_list);
-	list_init(&t->child_list);
-	sema_init(&t->wait_sema,0);
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
@@ -536,9 +534,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->awake_ticks = 0;
 	t->recent_cpu = 0;
 	t->fd_idx = 3;
-	t->files[0] = NULL;
-	t->files[1] = NULL;
-	t->files[2] = NULL;
+	t->exit_status = 0;
+	list_init(&t->child_list);
+	sema_init(&t->wait_sema,0);
+	sema_init(&t->child_load_sema,0);
+	sema_init(&t->exit_sema,0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

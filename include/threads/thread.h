@@ -96,20 +96,22 @@ struct thread {
 	struct list_elem all_elem;
 	int64_t awake_ticks;
 	struct list lock_list;
-	struct file *files[64];
+	struct file **files;
 	int fd_idx;
 	int nice;
 	int32_t recent_cpu;
+	struct file *exec_file;
 	struct semaphore wait_sema;
+	struct semaphore exit_sema;
+	struct semaphore child_load_sema;
 	struct thread *parent;
 	struct list child_list;
 	struct list_elem child_elem;
-	// struct thread *parent;
+	int exit_status;
 	
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
-	int exit_status;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

@@ -38,6 +38,7 @@ syscall_init (void) {
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+	lock_init(&filesys_lock);
 }
 void check_addr(char* addr){
 	if(!is_user_vaddr(addr)|| !pml4_get_page(thread_current()->pml4,addr))
@@ -131,18 +132,14 @@ int wait (pid_t child_tid){
 
 int create_fd(struct file *file){
 	struct thread *curr = thread_current();
-	if(curr->fd_idx <64){
-		int idx = curr->fd_idx;
-		curr->files[idx] = file;
-		curr->fd_idx ++;
-		return idx;
-	}
-	return -1;
+	struct file **files = curr->files;
+	int idx = curr->fd_idx;
+	curr->files[idx] = file;
+	curr->fd_idx ++;
+	return idx;
 }
 
 struct file* find_file_by_fd(int fd){
-	if(fd >64 || fd <3)
-		exit(-1);
 	struct thread *curr = thread_current();
 	return curr->files[fd];
 }
@@ -163,12 +160,15 @@ void del_fd(int fd){
 }
 
 bool create (const char *file, unsigned initial_size){
+	lock_acquire(&filesys_lock);
 	check_addr(file);
 	if(file ==NULL || strcmp(file,"")== 0)
 		exit(-1);
 	if(strlen(file) >= 511)
 		return 0;
-	return filesys_create(file,initial_size);
+	bool success = filesys_create(file,initial_size);
+	lock_release(&filesys_lock);
+	return success;
 }
 
 bool remove (const char *file){
@@ -201,22 +201,49 @@ int filesize (int fd){
 
 int read (int fd, void *buffer, unsigned length){
 	check_addr(buffer);
-	struct file *file = find_file_by_fd(fd);
-	if (file == NULL){
-		return -1;
+	int bytes_read = 0;
+	char *ptr = (char *)buffer;
+	if (fd == 1){
+		for(int i = 0 ; i < length; i++){
+			char ch = input_getc();
+			if (ch == '\n')
+				break;
+			*ptr = ch;
+			ptr ++;
+			bytes_read ++;
+		}
+	}else{
+		if(fd <= 2)
+			return -1;
+		struct file *file = find_file_by_fd(fd);
+		if (file == NULL)
+			return -1;
+		lock_acquire(&filesys_lock);
+		bytes_read = file_read(file,buffer,length);
+		lock_release(&filesys_lock);	
 	}
-	return file_read(file,buffer,length);
+	return bytes_read;
 }
 
 int write (int fd, const void *buffer, unsigned length){
-	if (fd == 1) 
+	check_addr(buffer);
+	int byte_write = 0;
+	if (fd == 1){ 
 		putbuf(buffer,length);
+		byte_write = length;
+	}
 	else
 	{
-		check_addr(buffer);
+		if(fd <= 2)
+			return -1;
 		struct file *file = find_file_by_fd(fd);
-		return file_write(file,buffer,length);
+		if(file == NULL)
+			return -1;
+		lock_acquire(&filesys_lock);
+		byte_write = file_write(file,buffer,length);
+		lock_release(&filesys_lock);
 	}
+	return byte_write;
 }
 // 파일 편집 위치 변경
 void seek (int fd, unsigned position){

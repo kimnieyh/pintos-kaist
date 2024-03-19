@@ -27,6 +27,7 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+struct thread * find_child(tid_t child_tid);
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
@@ -76,10 +77,14 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_) {
 	/* Clone current thread to new thread.*/
-	memcpy(&thread_current()->parent_if,if_,sizeof(struct intr_frame));
+	struct thread *curr = thread_current();
+	memcpy(&curr->parent_if,if_,sizeof(struct intr_frame));
 	tid_t child_tid = thread_create (name,
 			PRI_DEFAULT, __do_fork, thread_current ());
-	sema_down(&thread_current()->wait_sema);
+	struct thread *t = find_child(child_tid);
+	sema_down(&t->child_load_sema);
+	if(t->exit_status == TID_ERROR)
+		return TID_ERROR;
 	return child_tid;
 }
 
@@ -98,6 +103,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	{
 		return true;
 	}
+
 	parent_page = pml4_get_page(parent->pml4,va);
 	if(parent_page == NULL)
 		return false;
@@ -137,8 +143,7 @@ __do_fork (void *aux) {
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
 	if (current->pml4 == NULL)
-	{	
-		goto error;}
+		goto error;
 
 	process_activate (current);
 #ifdef VM
@@ -147,8 +152,7 @@ __do_fork (void *aux) {
 		goto error;
 #else
 	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
-	{	
-		goto error;}
+		goto error;
 #endif
 	
 	/* TODO: Your code goes here.
@@ -156,13 +160,12 @@ __do_fork (void *aux) {
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
-	//todo fd table 복제 file_duplicate();
-	for (int i = 0; i < parent->fd_idx;i++){
+	for (int i = 3; i < parent->fd_idx;i++){
 		struct file *new_file = file_duplicate(parent->files[i]);
 		current->files[i] = new_file;
 	}
 	current->fd_idx = parent->fd_idx;
-	sema_up(&parent->wait_sema);
+	sema_up(&current->child_load_sema);
 	process_init ();
 	/* Finally, switch to the newly created process. */
 	if_.R.rax = 0;
@@ -192,11 +195,14 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 	/* And then load the binary */
-
+	char *fn_copy;
+	fn_copy = palloc_get_page(0);
+	if(fn_copy == NULL)
+		return TID_ERROR;
+	strlcpy(fn_copy,file_name,PGSIZE);
 	success = load (file_name, &_if);
-
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
+	palloc_free_page (fn_copy);
 	if (!success)
 		return -1;
 	/* Start switched process. */
@@ -214,7 +220,7 @@ process_exec (void *f_name) {
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
-struct thread * child_list_check(tid_t child_tid){
+struct thread * find_child(tid_t child_tid){
 	struct list_elem *e;
 	struct thread *t = thread_current();
 
@@ -230,10 +236,14 @@ struct thread * child_list_check(tid_t child_tid){
 
 int
 process_wait (tid_t child_tid UNUSED) {
-	struct thread * child = child_list_check(child_tid);
-	if(child!=NULL) // 현재 쓰레드의 자식 리스트에 child_tid가 있을때! 
-		sema_down(&thread_current()->wait_sema);
-	return thread_current()->exit_status;
+	struct thread * t = find_child(child_tid);
+	if(t==NULL) // 현재 쓰레드의 자식 리스트에 child_tid가 있을때! 
+		return -1;	
+	sema_down(&t->wait_sema);
+	list_remove(&t->child_elem);
+	sema_up(&t->exit_sema);
+
+	return t->exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -242,10 +252,11 @@ process_exit (void) {
 	struct thread *curr = thread_current();
 	for (int i = 3 ; i <= curr->fd_idx ; i++)
 		close(i);
-	curr->parent->exit_status = curr->exit_status;
+	palloc_free_page(curr->files);
+	file_close(curr->exec_file);
 	process_cleanup ();
-	list_remove(&curr->child_elem);
-	sema_up(&curr->parent->wait_sema);
+	sema_up(&curr->wait_sema);
+	sema_down(&curr->exit_sema);
 }
 
 /* Free the current process's resources. */
@@ -414,6 +425,8 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
+	t->exec_file = file;
+	file_deny_write(file);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -492,7 +505,6 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
 	return success;
 }
 
