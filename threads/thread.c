@@ -555,7 +555,6 @@ next_thread_to_run (void) {
 		return idle_thread;
 	else
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
-	//todo 정렬하기 
 }
 
 /* Use iretq to launch the thread */

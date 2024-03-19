@@ -236,10 +236,6 @@ struct thread * child_list_check(tid_t child_tid){
 
 int
 process_wait (tid_t child_tid UNUSED) {
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
-	// timer_sleep(4);
 	struct thread * child = child_list_check(child_tid);
 	if(child!=NULL) // 현재 쓰레드의 자식 리스트에 child_tid가 있을때! 
 		sema_down(&thread_current()->wait_sema);
@@ -249,14 +245,13 @@ process_wait (tid_t child_tid UNUSED) {
 /* Exit the process. This function is called by thread_exit (). */
 void
 process_exit (void) {
-	/* TODO: Your code goes here.
-	 * TODO: Implement process termination message (see
-	 * TODO: project2/process_termination.html).
-	 * TODO: We recommend you to implement process resource cleanup here. */
-	thread_current()->parent->exit_status = thread_current()->exit_status;
+	struct thread *curr = thread_current();
+	for (int i = 3 ; i <= curr->fd_idx ; i++)
+		close(i);
+	curr->parent->exit_status = curr->exit_status;
 	process_cleanup ();
-	list_remove(&thread_current()->child_elem);
-	sema_up(&thread_current()->parent->wait_sema);
+	list_remove(&curr->child_elem);
+	sema_up(&curr->parent->wait_sema);
 }
 
 /* Free the current process's resources. */
