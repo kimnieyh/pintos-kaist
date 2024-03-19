@@ -112,7 +112,11 @@ pid_t fork (const char *thread_name,const struct intr_frame *f){
 
 int exec (const char *file){
 	check_addr(file);
-	int result = process_exec(file);
+	char *f_copy = palloc_get_page(0);
+	if(f_copy == NULL)
+		exit(-1);
+	strlcpy(f_copy,file,strlen(file)+1);
+	int result = process_exec(f_copy);
 	return result;
 }
 

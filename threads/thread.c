@@ -391,8 +391,7 @@ void thread_sleep(int64_t end_ticks) {
 void thread_awake(int64_t ticks){
 	global_ticks = ticks;
 	struct list_elem *e = list_begin(&sema.waiters);
-	enum intr_level old_level;
-	// old_level = intr_disable();
+
 	while(e != list_end(&sema.waiters))
 	{
 		if(list_entry(e,struct thread,elem)->awake_ticks <= ticks)
@@ -404,8 +403,6 @@ void thread_awake(int64_t ticks){
 			break;
 		}
 	}
-	
-	// intr_set_level(old_level);
 }
 /* Sets the current thread's priority to 0N0E0W0_0P000RIORITY. */
 void

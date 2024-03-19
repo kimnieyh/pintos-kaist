@@ -178,12 +178,7 @@ error:
  * Returns -1 on fail. */
 int
 process_exec (void *f_name) {
-	char *fn_copy;
-	fn_copy = palloc_get_page (0);
-	if (fn_copy == NULL)
-		return TID_ERROR;
-	strlcpy (fn_copy, f_name, PGSIZE);
-	char *file_name = fn_copy;
+	char *file_name = f_name;
 	bool success;
 
 	/* We cannot use the intr_frame in the thread structure.
@@ -197,14 +192,13 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 	/* And then load the binary */
-	
+
 	success = load (file_name, &_if);
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
 		return -1;
-	//hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -400,7 +394,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	char *args[128];  // 문자열을 가리키는 포인터 배열
 	int cnt = 0;
 	int args_size[128];
-	
+	// file_name = strtok_r(s, " ", &save_ptr);
+	// args[cnt] = file_name;
+	// cnt ++;
 	for (token = strtok_r(s, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
 	{
 		args[cnt] = token;
@@ -417,7 +413,6 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	file = filesys_open (file_name);
 	if (file == NULL) {
-		
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
