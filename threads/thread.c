@@ -538,6 +538,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->nice =0 ;
 	t->awake_ticks = 0;
 	t->recent_cpu = 0;
+	t->fd_idx = 3;
+	t->files[0] = NULL;
+	t->files[1] = NULL;
+	t->files[2] = NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

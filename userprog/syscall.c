@@ -126,21 +126,19 @@ int create_fd(struct file *file){
 		int idx = curr->fd_idx;
 		curr->files[idx] = file;
 		curr->fd_idx ++;
-		return idx+2;
+		return idx;
 	}
 	return -1;
 }
 
 struct file* find_file_by_fd(int fd){
-	fd -=2;
-	if(fd >64 || fd <0)
+	if(fd >64 || fd <3)
 		exit(-1);
 	struct thread *curr = thread_current();
 	return curr->files[fd];
 }
 
 void del_fd(int fd){
-	fd -= 2;
 	struct thread *curr = thread_current();
 	
 	if(fd == curr->fd_idx-1)
