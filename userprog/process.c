@@ -254,8 +254,8 @@ process_exit (void) {
 		close(i);
 	palloc_free_page(curr->files);
 	file_close(curr->exec_file);
-	process_cleanup ();
 	sema_up(&curr->wait_sema);
+	process_cleanup ();
 	sema_down(&curr->exit_sema);
 }
 
@@ -402,9 +402,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	char *s = file_name;
 
 	char *token, *save_ptr;
-	char *args[128];  // 문자열을 가리키는 포인터 배열
+	char *args[64];  // 문자열을 가리키는 포인터 배열
 	int cnt = 0;
-	int args_size[128];
+	int args_size[64];
 
 	for (token = strtok_r(s, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
 	{
