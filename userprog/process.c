@@ -394,9 +394,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	char *args[128];  // 문자열을 가리키는 포인터 배열
 	int cnt = 0;
 	int args_size[128];
-	// file_name = strtok_r(s, " ", &save_ptr);
-	// args[cnt] = file_name;
-	// cnt ++;
+
 	for (token = strtok_r(s, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
 	{
 		args[cnt] = token;

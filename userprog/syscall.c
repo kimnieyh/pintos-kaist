@@ -9,6 +9,7 @@
 #include "intrinsic.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "threads/palloc.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -82,8 +83,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = write(f->R.rdi,f->R.rsi,f->R.rdx);
 		break;
 	case SYS_SEEK:
+		seek(f->R.rdi,f->R.rsi);
 		break;
 	case SYS_TELL:
+		f->R.rax = tell(f->R.rdi);
 		break;
 	case SYS_CLOSE:
 		close(f->R.rdi);
@@ -117,6 +120,8 @@ int exec (const char *file){
 		exit(-1);
 	strlcpy(f_copy,file,strlen(file)+1);
 	int result = process_exec(f_copy);
+	if(result == -1)
+		exit(-1);
 	return result;
 }
 
@@ -204,18 +209,31 @@ int read (int fd, void *buffer, unsigned length){
 }
 
 int write (int fd, const void *buffer, unsigned length){
-	check_addr(buffer);
 	if (fd == 1) 
 		putbuf(buffer,length);
 	else
 	{
+		check_addr(buffer);
 		struct file *file = find_file_by_fd(fd);
 		return file_write(file,buffer,length);
 	}
 }
-
-void seek (int fd, unsigned position);
-unsigned tell (int fd);
+// 파일 편집 위치 변경
+void seek (int fd, unsigned position){
+	struct file *file = find_file_by_fd(fd);
+	check_addr(file);
+	if(file== NULL)
+		return;
+	file_seek(file,position);
+}
+// 파일 위치 반환
+unsigned tell (int fd){
+	struct file *file = find_file_by_fd(fd);
+	check_addr(file);
+	if(file==NULL)
+		return;
+	return file_tell(file); 
+}
 
 void close (int fd){
 	struct file *file = find_file_by_fd(fd);
