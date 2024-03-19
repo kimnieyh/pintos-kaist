@@ -4,14 +4,14 @@
 #include <stdbool.h>
 #include <debug.h>
 #include <stddef.h>
-
+#include "threads/interrupt.h"
 typedef int pid_t;
 
 void syscall_init (void);
 /* Projects 2 and later. */
 void halt (void); //NO_RETURN
 void exit (int status);// NO_RETURN
-pid_t fork (const char *thread_name);
+pid_t fork (const char *thread_name,const struct intr_frame *f);
 int exec (const char *file);
 int wait (pid_t);
 bool create (const char *file, unsigned initial_size);

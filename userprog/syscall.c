@@ -55,7 +55,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		exit(f->R.rdi);
 		break;
 	case SYS_FORK:
-		f->R.rax = fork(f->R.rdi);
+		f->R.rax = fork(f->R.rdi,f);
 		break;
 	case SYS_EXEC:  
 		f->R.rax = exec(f->R.rdi);
@@ -106,9 +106,8 @@ void exit (int status)// NO_RETURN
 	thread_exit();
 }
 
-pid_t fork (const char *thread_name){
-	return process_fork(thread_name,thread_current()->tf);
-
+pid_t fork (const char *thread_name,const struct intr_frame *f){
+	return process_fork(thread_name,f);
 }
 
 int exec (const char *file){
@@ -218,6 +217,7 @@ unsigned tell (int fd);
 
 void close (int fd){
 	struct file *file = find_file_by_fd(fd);
+	printf("%p\n",file);
 	if(file == NULL)
 		return;
 	file_close(file);
