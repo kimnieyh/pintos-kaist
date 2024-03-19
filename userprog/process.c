@@ -30,7 +30,6 @@ static void __do_fork (void *);
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
-	
 	struct thread *current = thread_current ();
 }
 
@@ -75,12 +74,12 @@ initd (void *f_name) {
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
 tid_t
-process_fork (const char *name, struct intr_frame *if_ UNUSED) {
+process_fork (const char *name, struct intr_frame *if_) {
 	/* Clone current thread to new thread.*/
-	memcpy(&thread_current()->tf,if_,sizeof(struct intr_frame));
+	memcpy(&thread_current()->parent_if,if_,sizeof(struct intr_frame));
 	tid_t child_tid = thread_create (name,
 			PRI_DEFAULT, __do_fork, thread_current ());
-	// process_wait(child_tid);
+	sema_down(&thread_current()->wait_sema);
 	return child_tid;
 }
 
@@ -94,7 +93,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	void *parent_page ;
 	void *newpage;
 	bool writable;
-	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	
 	if(is_kernel_vaddr(va))
 	{
 		return true;
@@ -102,27 +101,15 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	parent_page = pml4_get_page(parent->pml4,va);
 	if(parent_page == NULL)
 		return false;
-	//pml4_set_page (parent->pml4, pte, parent_page, writable);
-	/* 2. Resolve VA from the parent's page map level 4. */
-	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
-	 *    TODO: NEWPAGE. */
-	// 1. 메모리 할당
+
 	newpage = palloc_get_page(PAL_USER|PAL_ZERO);
 	if (newpage == NULL) {
 		return false;
 	}
-	
-	// 2. PAL_USER 확인 flag로 
-	// 3. 페이지 초기화
-	// 4. 페이지 주소 저장 -- NEW PAGE에 ! 
+
 	memcpy(newpage,parent_page,PGSIZE);
 	writable = is_writable(pte);
-	/* 4. TODO: Duplicate parent's page to the new page and
-	 *    TODO: check whether parent's page is writable or not (set WRITABLE
-	 *    TODO: according to the result). */
 
-	/* 5. Add new page to child's page table at address VA with WRITABLE
-	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		palloc_free_page(newpage);
 		return false;
@@ -141,7 +128,7 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if = &parent->tf;
+	struct intr_frame *parent_if = &parent->parent_if;
 	bool succ = true;
 	
 	/* 1. Read the cpu context to local stack. */
@@ -175,10 +162,10 @@ __do_fork (void *aux) {
 		current->files[i] = new_file;
 	}
 	current->fd_idx = parent->fd_idx;
-
 	sema_up(&parent->wait_sema);
 	process_init ();
 	/* Finally, switch to the newly created process. */
+	if_.R.rax = 0;
 	if (succ)
 		do_iret (&if_);
 error:
@@ -233,7 +220,7 @@ process_exec (void *f_name) {
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
-bool child_list_check(tid_t child_tid){
+struct thread * child_list_check(tid_t child_tid){
 	struct list_elem *e;
 	struct thread *t = thread_current();
 
@@ -242,9 +229,9 @@ bool child_list_check(tid_t child_tid){
 	{
 		struct thread *c = list_entry(e,struct thread,child_elem);
 		if(c->tid == child_tid)
-			return true;
+			return c;
 	}
-	return false;
+	return NULL;
 }
 
 int
@@ -253,9 +240,10 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
 	// timer_sleep(4);
-	if(child_list_check(child_tid)) // 현재 쓰레드의 자식 리스트에 child_tid가 있을때! 
+	struct thread * child = child_list_check(child_tid);
+	if(child!=NULL) // 현재 쓰레드의 자식 리스트에 child_tid가 있을때! 
 		sema_down(&thread_current()->wait_sema);
-	return -1;
+	return thread_current()->exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -265,11 +253,10 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	if(thread_current()){
-		list_remove(&thread_current()->child_elem);
-		sema_up(&thread_current()->parent->wait_sema);
-	}
+	thread_current()->parent->exit_status = thread_current()->exit_status;
 	process_cleanup ();
+	list_remove(&thread_current()->child_elem);
+	sema_up(&thread_current()->parent->wait_sema);
 }
 
 /* Free the current process's resources. */

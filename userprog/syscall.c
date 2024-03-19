@@ -60,7 +60,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_EXEC:  
 		f->R.rax = exec(f->R.rdi);
 	case SYS_WAIT:
-		wait(f->R.rdi);
+		f->R.rax = wait(f->R.rdi);
 		break;
 	case SYS_CREATE:
 		f->R.rax =create(f->R.rdi,f->R.rsi);
@@ -217,7 +217,6 @@ unsigned tell (int fd);
 
 void close (int fd){
 	struct file *file = find_file_by_fd(fd);
-	printf("%p\n",file);
 	if(file == NULL)
 		return;
 	file_close(file);
