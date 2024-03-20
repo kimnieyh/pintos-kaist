@@ -19,7 +19,6 @@
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
-
 #define f (1<<14)
 // Convert n to fixed point: n * f
 #define TO_FIXED_POINT(n, f) ((n) * (f))
@@ -234,7 +233,7 @@ thread_create (const char *name, int priority,
 	/* Initialize thread. */
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
-
+	t->files = palloc_get_multiple(PAL_ZERO,FDT_PAGES);
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
 	t->tf.rip = (uintptr_t) kernel_thread;
@@ -245,15 +244,12 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
-	t->parent = thread_current();
 	
-	if(thread_current())
-		t->recent_cpu = thread_current()->recent_cpu;
-	else 
-		t->recent_cpu = 0;
+	t->recent_cpu = thread_current()->recent_cpu;
+
 	list_push_back(&all_list,&t->all_elem);
 	list_push_back(&thread_current()->child_list,&t->child_elem);
-	t->files = palloc_get_page(PAL_ZERO);
+	
 	if(t->files == NULL)
 		return TID_ERROR;
 	/* Add to run queue. */

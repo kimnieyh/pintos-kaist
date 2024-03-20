@@ -83,8 +83,8 @@ process_fork (const char *name, struct intr_frame *if_) {
 			PRI_DEFAULT, __do_fork, thread_current ());
 	struct thread *t = find_child(child_tid);
 	sema_down(&t->child_load_sema);
-	if(t->exit_status == TID_ERROR)
-		return TID_ERROR;
+	if(t->exit_status == TID_ERROR){
+		return TID_ERROR;}
 	return child_tid;
 }
 
@@ -139,7 +139,7 @@ __do_fork (void *aux) {
 	
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
-
+	if_.R.rax = 0;
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
 	if (current->pml4 == NULL)
@@ -160,21 +160,26 @@ __do_fork (void *aux) {
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
-	for (int i = 3; i < parent->fd_idx;i++){
-		struct file *new_file = file_duplicate(parent->files[i]);
-		current->files[i] = new_file;
+	if (parent->fd_idx == FDT_COUNT_LIMIT){
+			goto error;
+		}
+	for (int i = 0; i < FDT_COUNT_LIMIT ;i++){
+		struct file *file = parent->files[i];
+		if(file == NULL)
+			continue;
+		file = file_duplicate(file);
+		current->files[i] = file;
 	}
 	current->fd_idx = parent->fd_idx;
 	sema_up(&current->child_load_sema);
 	process_init ();
+
 	/* Finally, switch to the newly created process. */
-	if_.R.rax = 0;
 	if (succ)
 		do_iret (&if_);
 error:
-	printf("error \n");
-	// sema_up(&parent->wait_sema);
-	thread_exit ();
+	sema_up(&current->child_load_sema);
+	exit(-1);
 }
 
 /* Switch the current execution context to the f_name.
@@ -195,14 +200,10 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 	/* And then load the binary */
-	char *fn_copy;
-	fn_copy = palloc_get_page(0);
-	if(fn_copy == NULL)
-		return TID_ERROR;
-	strlcpy(fn_copy,file_name,PGSIZE);
+
 	success = load (file_name, &_if);
 	/* If load failed, quit. */
-	palloc_free_page (fn_copy);
+	palloc_free_page (f_name);
 	if (!success)
 		return -1;
 	/* Start switched process. */
@@ -237,25 +238,34 @@ struct thread * find_child(tid_t child_tid){
 int
 process_wait (tid_t child_tid UNUSED) {
 	struct thread * t = find_child(child_tid);
-	if(t==NULL) // 현재 쓰레드의 자식 리스트에 child_tid가 있을때! 
+	if(t==NULL) 
 		return -1;	
 	sema_down(&t->wait_sema);
-	list_remove(&t->child_elem);
+	int result = t->exit_status; 
 	sema_up(&t->exit_sema);
-
-	return t->exit_status;
+	list_remove(&t->child_elem);
+	return result;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
 void
 process_exit (void) {
 	struct thread *curr = thread_current();
-	for (int i = 3 ; i <= curr->fd_idx ; i++)
-		close(i);
+	
+	while(!list_empty(&curr->child_list)){
+		struct thread *child = list_entry(list_begin(&curr->child_list),struct thread, child_elem);
+		wait(child->tid);
+	}	
+	int i;
+	for (i = 2; i < FDT_COUNT_LIMIT; i++){
+		if(curr->files[i]!= NULL)
+			close(i);
+	}
+
 	palloc_free_page(curr->files);
 	file_close(curr->exec_file);
-	sema_up(&curr->wait_sema);
 	process_cleanup ();
+	sema_up(&curr->wait_sema);
 	sema_down(&curr->exit_sema);
 }
 
@@ -502,7 +512,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	
 	place_stack(args,args_size,cnt,if_);
 	success = true;
-
+	
 done:
 	/* We arrive here whether the load is successful or not. */
 	return success;

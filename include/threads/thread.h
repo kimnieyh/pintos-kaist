@@ -104,11 +104,10 @@ struct thread {
 	struct semaphore wait_sema;
 	struct semaphore exit_sema;
 	struct semaphore child_load_sema;
-	struct thread *parent;
 	struct list child_list;
 	struct list_elem child_elem;
 	int exit_status;
-	
+	struct intr_frame parent_if;
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
@@ -117,7 +116,6 @@ struct thread {
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
 #endif
-	struct intr_frame parent_if;
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
@@ -164,4 +162,6 @@ void decay_recent_cpu(void);
 void set_decay(struct thread *t);
 void set_priority(struct thread *t);
 void update_priority(void);
+#define FDT_PAGES 3
+#define FDT_COUNT_LIMIT FDT_PAGES*(1 << 9)
 #endif /* threads/thread.h */

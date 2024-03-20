@@ -22,7 +22,6 @@ void syscall_handler (struct intr_frame *);
  *
  * The syscall instruction works by reading the values from the the Model
  * Specific Register (MSR). For the details, see the manual. */
-
 #define MSR_STAR 0xc0000081         /* Segment selector msr */
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
@@ -65,13 +64,12 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		f->R.rax = wait(f->R.rdi);
 		break;
 	case SYS_CREATE:
-		f->R.rax =create(f->R.rdi,f->R.rsi);
+		f->R.rax = create(f->R.rdi,f->R.rsi);
 		break;
 	case SYS_REMOVE:
 		remove(f->R.rdi);
 		break;
 	case SYS_OPEN:
-		check_addr(f->R.rdi);
 		f->R.rax = open(f->R.rdi);
 		break;
 	case SYS_FILESIZE:
@@ -104,8 +102,8 @@ void halt (void) //NO_RETURN
 
 void exit (int status)// NO_RETURN
 {
-	thread_current()->exit_status = status;
 	struct thread *curr = thread_current ();
+	curr->exit_status = status;
 	printf("%s: exit(%d)\n",curr->name,curr->exit_status);
 	thread_exit();
 }
@@ -119,7 +117,7 @@ int exec (const char *file){
 	char *f_copy = palloc_get_page(0);
 	if(f_copy == NULL)
 		exit(-1);
-	strlcpy(f_copy,file,strlen(file)+1);
+	strlcpy(f_copy,file,PGSIZE);
 	int result = process_exec(f_copy);
 	if(result == -1)
 		exit(-1);
@@ -132,40 +130,39 @@ int wait (pid_t child_tid){
 
 int create_fd(struct file *file){
 	struct thread *curr = thread_current();
-	struct file **files = curr->files;
-	int idx = curr->fd_idx;
-	curr->files[idx] = file;
-	curr->fd_idx ++;
-	return idx;
+	struct file **fdt = curr->files;
+	while(curr->fd_idx < FDT_COUNT_LIMIT && fdt[curr->fd_idx])
+		curr->fd_idx++;
+	if(curr->fd_idx >= FDT_COUNT_LIMIT)
+		return -1;
+	fdt[curr->fd_idx] = file;
+
+	return curr->fd_idx;
 }
 
 struct file* find_file_by_fd(int fd){
 	struct thread *curr = thread_current();
-	return curr->files[fd];
+	struct file **fdt = curr->files;
+	if(fd <2 || fd >= FDT_COUNT_LIMIT)
+		return NULL;
+	return fdt[fd];
 }
 
 void del_fd(int fd){
 	struct thread *curr = thread_current();
-	
-	if(fd == curr->fd_idx-1)
-	{
-		curr->files[fd] = NULL;
-		curr->fd_idx --;
-	}else{
-		for(int i = fd; i < curr->fd_idx ; i++){
-			curr->files[i] = curr->files[i+1];
-		}
-		curr->fd_idx --;
-	}	 
+	struct file **fdt = curr->files;
+	if(fd < 2 || fd >= FDT_COUNT_LIMIT)
+		return NULL;
+	fdt[fd] = NULL;
 }
 
 bool create (const char *file, unsigned initial_size){
-	lock_acquire(&filesys_lock);
 	check_addr(file);
-	if(file ==NULL || strcmp(file,"")== 0)
-		exit(-1);
-	if(strlen(file) >= 511)
-		return 0;
+	// if(file ==NULL || strcmp(file,"")== 0)
+	// 	exit(-1);
+	// if(strlen(file) >= 511)
+	// 	return 0;
+	lock_acquire(&filesys_lock);
 	bool success = filesys_create(file,initial_size);
 	lock_release(&filesys_lock);
 	return success;
@@ -176,20 +173,22 @@ bool remove (const char *file){
 }
 
 int open (const char *file){
-	if(file == NULL){
-		exit(-1);
-	}
-	if(strcmp(file,"")== 0 ){
-		return -1;
-	}
+	check_addr(file);
+	// if(file == NULL){
+	// 	exit(-1);
+	// }
+	// if(strcmp(file,"")== 0 ){
+	// 	return -1;
+	// }
 	struct file *open_file = filesys_open(file);
 
-	if(open_file == NULL){
+	if(open_file == NULL)
 		return -1;
-	}else {
-		int fd = create_fd(open_file);
-		return fd;
-	}
+
+	int fd = create_fd(open_file);
+	if (fd == -1)
+		file_close(open_file);
+	return fd;
 }
 
 int filesize (int fd){
@@ -213,7 +212,7 @@ int read (int fd, void *buffer, unsigned length){
 			bytes_read ++;
 		}
 	}else{
-		if(fd <= 2)
+		if (fd < 2)
 			return -1;
 		struct file *file = find_file_by_fd(fd);
 		if (file == NULL)
@@ -234,7 +233,7 @@ int write (int fd, const void *buffer, unsigned length){
 	}
 	else
 	{
-		if(fd <= 2)
+		if (fd < 2)
 			return -1;
 		struct file *file = find_file_by_fd(fd);
 		if(file == NULL)
@@ -264,6 +263,8 @@ unsigned tell (int fd){
 }
 
 void close (int fd){
+	if (fd <2)
+		return;
 	struct file *file = find_file_by_fd(fd);
 	if(file == NULL)
 		return;
