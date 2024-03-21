@@ -163,7 +163,7 @@ __do_fork (void *aux) {
 	if (parent->fd_idx == FDT_COUNT_LIMIT){
 			goto error;
 		}
-	for (int i = 0; i < FDT_COUNT_LIMIT ;i++){
+	for (int i = 2; i < FDT_COUNT_LIMIT ;i++){
 		struct file *file = parent->files[i];
 		if(file == NULL)
 			continue;
@@ -261,8 +261,8 @@ process_exit (void) {
 		if(curr->files[i]!= NULL)
 			close(i);
 	}
-
-	palloc_free_page(curr->files);
+	
+	palloc_free_multiple(curr->files,FDT_PAGES);
 	file_close(curr->exec_file);
 	process_cleanup ();
 	sema_up(&curr->wait_sema);

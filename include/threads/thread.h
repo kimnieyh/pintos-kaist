@@ -162,6 +162,6 @@ void decay_recent_cpu(void);
 void set_decay(struct thread *t);
 void set_priority(struct thread *t);
 void update_priority(void);
-#define FDT_PAGES 3
+#define FDT_PAGES 5
 #define FDT_COUNT_LIMIT FDT_PAGES*(1 << 9)
 #endif /* threads/thread.h */

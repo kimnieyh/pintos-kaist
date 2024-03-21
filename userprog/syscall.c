@@ -90,6 +90,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_CLOSE:
 		close(f->R.rdi);
 		break;
+	case SYS_DUP2:
+		f->R.rax = dup2(f->R.rdi,f->R.rsi);
+		break;
 	default:
 		break;
 	}
@@ -143,7 +146,7 @@ int create_fd(struct file *file){
 struct file* find_file_by_fd(int fd){
 	struct thread *curr = thread_current();
 	struct file **fdt = curr->files;
-	if(fd <2 || fd >= FDT_COUNT_LIMIT)
+	if(fd >= FDT_COUNT_LIMIT)
 		return NULL;
 	return fdt[fd];
 }
@@ -158,10 +161,6 @@ void del_fd(int fd){
 
 bool create (const char *file, unsigned initial_size){
 	check_addr(file);
-	// if(file ==NULL || strcmp(file,"")== 0)
-	// 	exit(-1);
-	// if(strlen(file) >= 511)
-	// 	return 0;
 	lock_acquire(&filesys_lock);
 	bool success = filesys_create(file,initial_size);
 	lock_release(&filesys_lock);
@@ -174,12 +173,7 @@ bool remove (const char *file){
 
 int open (const char *file){
 	check_addr(file);
-	// if(file == NULL){
-	// 	exit(-1);
-	// }
-	// if(strcmp(file,"")== 0 ){
-	// 	return -1;
-	// }
+
 	struct file *open_file = filesys_open(file);
 
 	if(open_file == NULL)
@@ -202,7 +196,7 @@ int read (int fd, void *buffer, unsigned length){
 	check_addr(buffer);
 	int bytes_read = 0;
 	char *ptr = (char *)buffer;
-	if (fd == 0){
+	if (fd == 0 && find_file_by_fd(fd) != NULL){
 		for(int i = 0 ; i < length; i++){
 			char ch = input_getc();
 			if (ch == '\n')
@@ -227,7 +221,7 @@ int read (int fd, void *buffer, unsigned length){
 int write (int fd, const void *buffer, unsigned length){
 	check_addr(buffer);
 	int byte_write = 0;
-	if (fd == 1){ 
+	if (fd == 1 && find_file_by_fd(fd) != NULL){ 
 		putbuf(buffer,length);
 		byte_write = length;
 	}
@@ -263,8 +257,14 @@ unsigned tell (int fd){
 }
 
 void close (int fd){
-	if (fd <2)
+	if (fd < 0)
 		return;
+	if (fd < 2)
+	{	
+		struct thread *t = thread_current();
+		t->files[fd] = NULL;
+		return;
+	}
 	struct file *file = find_file_by_fd(fd);
 	if(file == NULL)
 		return;
@@ -272,4 +272,18 @@ void close (int fd){
 	del_fd(fd);
 }
 
-int dup2(int oldfd, int newfd);
+int dup2(int oldfd, int newfd){
+	if (oldfd < 2 || newfd < 2 )
+		return -1;
+	struct file *old_file = find_file_by_fd(oldfd);
+	struct file *new_file = find_file_by_fd(newfd);
+
+	if(old_file == NULL)
+		return -1;
+	if (old_file == new_file)
+		return;
+	lock_acquire(&filesys_lock);
+	thread_current()->files[newfd] = file_duplicate(old_file);
+	lock_release(&filesys_lock);
+	return newfd;
+}
