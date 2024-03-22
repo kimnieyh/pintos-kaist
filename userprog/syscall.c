@@ -25,7 +25,12 @@ void syscall_handler (struct intr_frame *);
 #define MSR_STAR 0xc0000081         /* Segment selector msr */
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
-
+/* An open file. */
+struct file {
+	struct inode *inode;        /* File's inode. */
+	off_t pos;                  /* Current position. */
+	bool deny_write;            /* Has file_deny_write() been called? */
+};
 void
 syscall_init (void) {
 	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48  |
@@ -116,6 +121,7 @@ pid_t fork (const char *thread_name,const struct intr_frame *f){
 }
 
 int exec (const char *file){
+	// printf("exec start\n");
 	check_addr(file);
 	char *f_copy = palloc_get_page(0);
 	if(f_copy == NULL)
@@ -145,21 +151,18 @@ int create_fd(struct file *file){
 
 struct file* find_file_by_fd(int fd){
 	struct thread *curr = thread_current();
-	struct file **fdt = curr->files;
-	if(fd >= FDT_COUNT_LIMIT)
+	if(fd >= FDT_COUNT_LIMIT || fd <0)
 		return NULL;
-	return fdt[fd];
+	return curr->files[fd];
 }
 
 void del_fd(int fd){
 	struct thread *curr = thread_current();
-	struct file **fdt = curr->files;
-	if(fd < 2 || fd >= FDT_COUNT_LIMIT)
-		return NULL;
-	fdt[fd] = NULL;
+	curr->files[fd] = NULL;
 }
 
 bool create (const char *file, unsigned initial_size){
+	// printf("create start\n");
 	check_addr(file);
 	lock_acquire(&filesys_lock);
 	bool success = filesys_create(file,initial_size);
@@ -172,6 +175,7 @@ bool remove (const char *file){
 }
 
 int open (const char *file){
+	// printf("open start\n");
 	check_addr(file);
 
 	struct file *open_file = filesys_open(file);
@@ -187,16 +191,27 @@ int open (const char *file){
 
 int filesize (int fd){
 	struct file *file = find_file_by_fd(fd);
-	if(file == NULL)
+	if(file < 3)
 		return -1;
 	return file_length(file);
 }
-
+void pos_update(struct file *file){
+	int i;
+	struct thread *t = thread_current();
+	for (i = 0 ; i < FDT_COUNT_LIMIT; i ++){
+		if(t->files[i] > 2)
+			if(t->files[i]->inode == file->inode)
+				t->files[i]->pos = file_tell(file);
+	}
+}
 int read (int fd, void *buffer, unsigned length){
+	// printf("read start:%d\n",fd);
+
 	check_addr(buffer);
+	struct file *file = find_file_by_fd(fd);
 	int bytes_read = 0;
 	char *ptr = (char *)buffer;
-	if (fd == 0 && find_file_by_fd(fd) != NULL){
+	if (file == 1){
 		for(int i = 0 ; i < length; i++){
 			char ch = input_getc();
 			if (ch == '\n')
@@ -206,84 +221,84 @@ int read (int fd, void *buffer, unsigned length){
 			bytes_read ++;
 		}
 	}else{
-		if (fd < 2)
+		if (file <3)
 			return -1;
-		struct file *file = find_file_by_fd(fd);
-		if (file == NULL)
-			return -1;
+
 		lock_acquire(&filesys_lock);
 		bytes_read = file_read(file,buffer,length);
-		lock_release(&filesys_lock);	
+		lock_release(&filesys_lock);
+		pos_update(file);	
 	}
 	return bytes_read;
 }
 
 int write (int fd, const void *buffer, unsigned length){
+	// printf("write start\n");
 	check_addr(buffer);
+	struct file *file = find_file_by_fd(fd);
+	// printf("fd:%d\n",fd);
+	// printf("file:%d\n",file);
 	int byte_write = 0;
-	if (fd == 1 && find_file_by_fd(fd) != NULL){ 
+	if (file == 2){ 
 		putbuf(buffer,length);
 		byte_write = length;
 	}
 	else
 	{
-		if (fd < 2)
+		if (file < 3)
 			return -1;
-		struct file *file = find_file_by_fd(fd);
-		if(file == NULL)
-			return -1;
+
 		lock_acquire(&filesys_lock);
 		byte_write = file_write(file,buffer,length);
 		lock_release(&filesys_lock);
+		pos_update(file);
 	}
 	return byte_write;
 }
 // 파일 편집 위치 변경
 void seek (int fd, unsigned position){
-	if(fd <3)
-		return;
 	struct file *file = find_file_by_fd(fd);
-	if(file== NULL)
+	if(file < 3)
 		return;
 	file_seek(file,position);
+	pos_update(file);
 }
 // 파일 위치 반환
 unsigned tell (int fd){
 	struct file *file = find_file_by_fd(fd);
-	check_addr(file);
-	if(file==NULL)
+	if(file < 3)
 		return;
 	return file_tell(file); 
 }
 
 void close (int fd){
-	if (fd < 0)
-		return;
-	if (fd < 2)
-	{	
-		struct thread *t = thread_current();
-		t->files[fd] = NULL;
-		return;
-	}
 	struct file *file = find_file_by_fd(fd);
-	if(file == NULL)
-		return;
-	file_close(file);
-	del_fd(fd);
+	if (file > 0 ){
+		if (file > 2)
+		{	
+			file_close(file);
+		}
+		del_fd(fd);
+	}
 }
 
 int dup2(int oldfd, int newfd){
-	if (oldfd < 2 || newfd < 2 )
-		return -1;
 	struct file *old_file = find_file_by_fd(oldfd);
 	struct file *new_file = find_file_by_fd(newfd);
-
+	// printf("old:%d, new:%d\n",oldfd,newfd);
 	if(old_file == NULL)
 		return -1;
 	if (old_file == new_file)
-		return;
-	lock_acquire(&filesys_lock);
-	thread_current()->files[newfd] = file_duplicate(old_file);
-	lock_release(&filesys_lock);
+		return newfd;
+	
+	if (old_file > 2 ){
+		close(newfd);
+		lock_acquire(&filesys_lock);
+		thread_current()->files[newfd] = file_duplicate(old_file);
+		lock_release(&filesys_lock);
+	}else{
+		close(newfd);
+		thread_current()->files[newfd] = old_file;
+	}
 	return newfd;
 }

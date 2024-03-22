@@ -235,7 +235,7 @@ thread_create (const char *name, int priority,
 	tid = t->tid = allocate_tid ();
 	t->files = palloc_get_multiple(PAL_ZERO,FDT_PAGES);
 	t->files[0] = 1;
-	t->files[1] = 1;
+	t->files[1] = 2;
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
 	t->tf.rip = (uintptr_t) kernel_thread;

@@ -66,7 +66,6 @@ initd (void *f_name) {
 #endif
 
 	process_init ();
-
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
@@ -163,13 +162,16 @@ __do_fork (void *aux) {
 	if (parent->fd_idx == FDT_COUNT_LIMIT){
 			goto error;
 		}
-	for (int i = 2; i < FDT_COUNT_LIMIT ;i++){
+	for (int i = 0; i < FDT_COUNT_LIMIT ;i++){
 		struct file *file = parent->files[i];
-		if(file == NULL)
-			continue;
-		file = file_duplicate(file);
+		if (file > 2)
+		{	file = file_duplicate(file);
+			if (!file)
+				goto error;	
+		}
 		current->files[i] = file;
 	}
+	//printf("name:%s, files0:%d files1:%d\n",thread_current()->name,thread_current()->files[0],thread_current()->files[1]);
 	current->fd_idx = parent->fd_idx;
 	sema_up(&current->child_load_sema);
 	process_init ();
@@ -200,12 +202,13 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 	/* And then load the binary */
-
+	
 	success = load (file_name, &_if);
 	/* If load failed, quit. */
 	palloc_free_page (f_name);
 	if (!success)
 		return -1;
+	
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -257,11 +260,9 @@ process_exit (void) {
 		wait(child->tid);
 	}	
 	int i;
-	for (i = 2; i < FDT_COUNT_LIMIT; i++){
-		if(curr->files[i]!= NULL)
-			close(i);
+	for (i = 0; i < FDT_COUNT_LIMIT; i++){
+		close(i);
 	}
-	
 	palloc_free_multiple(curr->files,FDT_PAGES);
 	file_close(curr->exec_file);
 	process_cleanup ();
