@@ -134,7 +134,6 @@ page_fault (struct intr_frame *f) {
 	   be assured of reading CR2 before it changed). */
 	intr_enable ();
 
-	exit(-1);
 	/* Determine cause. */
 	not_present = (f->error_code & PF_P) == 0;
 	write = (f->error_code & PF_W) != 0;
@@ -145,7 +144,7 @@ page_fault (struct intr_frame *f) {
 	if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
 		return;
 #endif
-
+	exit(-1);
 	/* Count page faults. */
 	page_fault_cnt++;
 

@@ -24,7 +24,7 @@ bool
 file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &file_ops;
-
+	page->is_stack = type;
 	struct file_page *file_page = &page->file;
 }
 

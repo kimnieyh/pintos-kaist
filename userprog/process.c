@@ -90,7 +90,7 @@ process_fork (const char *name, struct intr_frame *if_) {
 #ifndef VM
 /* Duplicate the parent's address space by passing this function to the
  * pml4_for_each. This is only for the project 2. */
-static bool // 그 주소의 주소 ...?
+static bool 
 duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	struct thread *current = thread_current ();
 	struct thread *parent = (struct thread *) aux;
@@ -208,7 +208,6 @@ process_exec (void *f_name) {
 	palloc_free_page (f_name);
 	if (!success)
 		return -1;
-	
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -439,6 +438,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	t->exec_file = file;
 	file_deny_write(file);
 
+	//ELF파일 헤더 읽기
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -451,17 +451,22 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
-	/* Read program headers. */  
+	/* Read program headers. */
+	// ELF파일 헤더의 프로그램 헤더 오프셋 설정  
 	file_ofs = ehdr.e_phoff;
+	// ELF 파일은 여러 프로그램을 가지고 있을 수 있다. 
+	// ELF 파일의 프로그램 헤더를 프로그램 헤더의 수만큼 반복해서 읽는다. 
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		struct Phdr phdr;
 
 		if (file_ofs < 0 || file_ofs > file_length (file))
 			goto done;
+		// 파일 포인터를 프로그램 헤더 위치로 이동
 		file_seek (file, file_ofs);
-
+		// 파일을 온전히 다 못 읽었다면 즉시 중단 
 		if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
 			goto done;
+		// 파일 오프셋을 현재 프로그램 헤더의 크기 만큼 증가 시킴 --> 다음 프로그램 읽을 준비
 		file_ofs += sizeof phdr;
 		switch (phdr.p_type) {
 			case PT_NULL:
@@ -475,6 +480,7 @@ load (const char *file_name, struct intr_frame *if_) {
 			case PT_INTERP:
 			case PT_SHLIB:
 				goto done;
+			// 메모리에 로드 되어야 하는 세그먼트 (코드 or 데이터 포함)
 			case PT_LOAD:
 				if (validate_segment (&phdr, file)) {
 					bool writable = (phdr.p_flags & PF_W) != 0;
@@ -503,14 +509,14 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
-
 	/* Set up stack. */
 	if (!setup_stack (if_))
+	{	
+		printf("[FAIL]setup_stack\n");
 		goto done;
-
+	}
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-	
 	place_stack(args,args_size,cnt,if_);
 	success = true;
 	
@@ -666,12 +672,26 @@ install_page (void *upage, void *kpage, bool writable) {
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
-
+struct file_info{
+	struct file *file;
+	size_t bytes;
+	off_t offset;
+};
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	// printf("[START] lazy_load_segment \n");
+	struct file_info *file_info = (struct file_info *)aux;
+	struct frame *frame = page->frame;
+	file_seek(file_info->file,file_info->offset);
+	if(file_read(file_info->file,frame->kva,file_info->bytes)!= (int)file_info->bytes)
+		return false;
+	memset((frame->kva)+(file_info->bytes),0,PGSIZE-(file_info->bytes));
+
+	// printf("[END] lazy_load_segment \n");
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -688,13 +708,18 @@ lazy_load_segment (struct page *page, void *aux) {
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
+
+
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+	// printf("[START] load_segment start\n");
+	//load_segment (file, file_page, (void *) mem_page,read_bytes, zero_bytes, writable)
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-
+	
+	file_seek(file,ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
@@ -703,16 +728,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		struct file_info *file_info = calloc(sizeof(struct file_info),1);
+		file_info->file = file;
+		file_info->offset = ofs;
+		file_info->bytes = page_read_bytes;
+		void *aux = file_info;
+		// VM_ANON : 익명 페이지 -> 파일에서 데이터를 읽어오는 것이 아니라 
+		// 시스템이 관리하는 메모리 영역 
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
+		{	
+			// printf("[FAIL]load_segment.vm_alloc_page_with_initializer\n");
 			return false;
-
+		}
 		/* Advance. */
+		ofs += page_read_bytes;
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
 	}
+	// printf("[END] load_segment end\n");
 	return true;
 }
 
@@ -721,11 +756,14 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-	/* TODO: Map the stack on stack_bottom and claim the page immediately.
-	 * TODO: If success, set the rsp accordingly.
-	 * TODO: You should mark the page is stack. */
-	/* TODO: Your code goes here */
-
-	return success;
+	vm_alloc_page(VM_ANON|IS_STACK,stack_bottom,true);
+	if(!vm_claim_page(stack_bottom))
+	{
+		printf("[FAIL]setup_stack vm_claim_page\n");
+		return false;
+	}
+	if_->rsp = USER_STACK;
+	return true;
 }
+
 #endif /* VM */
