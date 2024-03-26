@@ -21,8 +21,7 @@ enum thread_status {
 
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
-typedef int tid_t;
-#define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
+#define TID_ERROR ((int) -1)          /* Error value for int. */
 
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
@@ -87,7 +86,7 @@ typedef int tid_t;
  * blocked state is on a semaphore wait list. */
 struct thread {
 	/* Owned by thread.c. */
-	tid_t tid;                          /* Thread identifier. */
+	int tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
@@ -133,13 +132,13 @@ void thread_tick (void);
 void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
-tid_t thread_create (const char *name, int priority, thread_func *, void *);
+int thread_create (const char *name, int priority, thread_func *, void *);
 int thread_ready_list(void);
 void thread_block (void);
 void thread_unblock (struct thread *);
 
 struct thread *thread_current (void);
-tid_t thread_tid (void);
+int thread_tid (void);
 const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;

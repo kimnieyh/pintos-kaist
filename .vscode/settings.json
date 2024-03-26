@@ -13,6 +13,10 @@
         "inode.h": "c",
         "syscall.h": "c",
         "debug.h": "c",
-        "*.inc": "c"
-    }
+        "*.inc": "c",
+        "stdbool.h": "c",
+        "stdint.h": "c",
+        "vm.h": "c",
+        "process.h": "c"
+    },
 }

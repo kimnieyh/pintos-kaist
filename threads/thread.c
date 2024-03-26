@@ -97,7 +97,7 @@ static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
-static tid_t allocate_tid (void);
+static int allocate_tid (void);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -207,7 +207,7 @@ thread_print_stats (void) {
    and adds it to the ready queue.  Returns the thread identifier
    for the new thread, or TID_ERROR if creation fails.
 
-   If thread_start() has been called, then the new thread may be
+   If thread_start() has been called, then the new thread may bea
    scheduled before thread_create() returns.  It could even exit
    before thread_create() returns.  Contrariwise, the original
    thread may run for any amount of time before the new thread is
@@ -217,11 +217,11 @@ thread_print_stats (void) {
    The code provided sets the new thread's `priority' member to
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
-tid_t
+int
 thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
 	struct thread *t;
-	tid_t tid;
+	int tid;
 
 	ASSERT (function != NULL);
 
@@ -322,7 +322,7 @@ thread_current (void) {
 }
 
 /* Returns the running thread's tid. */
-tid_t
+int
 thread_tid (void) {
 	return thread_current ()->tid;
 }
@@ -704,10 +704,10 @@ schedule (void) {
 }
 
 /* Returns a tid to use for a new thread. */
-static tid_t
+static int
 allocate_tid (void) {
-	static tid_t next_tid = 1;
-	tid_t tid;
+	static int next_tid = 1;
+	int tid;
 
 	lock_acquire (&tid_lock);
 	tid = next_tid++;

@@ -98,6 +98,12 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_DUP2:
 		f->R.rax = dup2(f->R.rdi,f->R.rsi);
 		break;
+	case SYS_MMAP:
+		f->R.rax = (uint64_t)mmap(f->R.rdi,f->R.rsi,f->R.rdx,f->R.r10,f->R.r8);
+		break;
+	case SYS_MUNMAP:
+		munmap(f->R.rdi);
+		break;
 	default:
 		break;
 	}
@@ -301,4 +307,35 @@ int dup2(int oldfd, int newfd){
 		thread_current()->files[newfd] = old_file;
 	}
 	return newfd;
+}
+
+void *
+mmap (void *addr, size_t length, int writable, int fd, unsigned int offset) {
+	struct file *file = find_file_by_fd(fd);
+	struct file *new_file = file_duplicate(file);
+
+	if( file < 3 ){
+		// printf("[FAIL]file < 3\n");
+		return NULL;}
+	if( length == NULL ){
+		// printf("[FAIL]length is NULL\n");
+		return NULL;}
+	if( addr == NULL ){
+		// printf("[FAIL]addr is NULL\n");
+		return NULL;}
+	if( pg_ofs(addr) ){
+		// printf("[FAIL]addr is not pg_ofs %p\n ",addr);
+		return NULL;}
+	if( !file_length(file) ){
+		// printf("[FAIL]file_length is NULL\n");
+		return NULL;
+	}
+	return do_mmap(addr,length,writable,new_file,offset);
+}
+
+void
+munmap (void *addr) {
+	if(addr == NULL)
+		return;
+	do_munmap(addr);
 }

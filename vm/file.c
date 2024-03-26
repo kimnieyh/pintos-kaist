@@ -44,15 +44,56 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	file_close(file_page->file);
 }
 
 /* Do the mmap */
 void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
+	// printf("[START]do_mmap!\n");
+	size_t file_size = file_length(file);
+	uint32_t read_bytes, zero_bytes;
+	read_bytes = length > file_size ? offset + length : offset + file_size;
+	zero_bytes = (ROUND_UP (read_bytes, PGSIZE)
+								- read_bytes);
+
+	void *ret = addr;
+	while ( read_bytes > 0 || zero_bytes > 0 ) {
+		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+		struct file_info *file_info = calloc(sizeof(struct file_info),1);
+		file_info->file = file;
+		file_info->offset = offset;
+		file_info->bytes = file_size;
+	
+		if(!vm_alloc_page_with_initializer(VM_FILE, addr,
+					writable, lazy_load_segment,file_info))
+		{
+			// printf("[FAIL] do_mmap.vm_alloc_page_with_initializer\n");
+			free(file_info);
+			return NULL;
+		}
+		offset += page_read_bytes;
+		read_bytes -= page_read_bytes;
+		zero_bytes -= page_zero_bytes;
+		addr += PGSIZE;
+	}
+	return ret;
 }
 
 /* Do the munmap */
 void
 do_munmap (void *addr) {
+	// printf("[START]do_munmap start\n");
+	struct thread *t = thread_current();
+	struct page *page = spt_find_page(&t->spt,addr);
+	struct file *file = page->file.file;
+
+	
+	if (page == NULL)
+		return;
+	spt_remove_page(&t->spt,page);
+	// printf("[END]do_munmap end\n");
 }

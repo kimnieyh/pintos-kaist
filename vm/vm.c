@@ -73,6 +73,8 @@ bool
 			printf("[FAIL] vm_alloc_page_with_initializer spt_insert_page\n");
 			goto err;
 		}
+	}else{
+		return false;
 	}
 	return true;
 err:
@@ -103,6 +105,8 @@ spt_insert_page (struct hash *spt UNUSED,
 
 void
 spt_remove_page (struct hash *spt, struct page *page) {
+	//todo hash 테이블에서 지우는 것 추가 
+	hash_delete(spt,&page->hash_elem);
 	vm_dealloc_page (page);
 	return true;
 }
@@ -163,7 +167,8 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct hash *spt UNUSED = &thread_current ()->spt;
 	struct page *page = spt_find_page(spt,addr);
-	// printf("[START] vm_try_handle_fault\n");
+	if(addr == NULL)
+		return false;
 	if(is_kernel_vaddr(addr)&&user)
 		return false;
 	
@@ -184,10 +189,11 @@ vm_dealloc_page (struct page *page) {
 /* Claim the page that allocate on VA. */
 bool
 vm_claim_page (void *va UNUSED) {
+	// printf("%p\n",va);
 	struct page *page = spt_find_page(&thread_current()->spt,va);
 	if(page == NULL)
 		return false;
-
+	// printf("page va :%p\n",page->va);
 	return vm_do_claim_page (page);
 }
 
@@ -205,6 +211,7 @@ vm_do_claim_page (struct page *page) {
 	{
 		printf("[FAIL]vm_do_claim_page pml4_set_page fail\n");
 	}
+	// printf("[END] vm_do_claim_page\n");
 	return swap_in (page, frame->kva);
 }
 
@@ -224,11 +231,32 @@ supplemental_page_table_init (struct hash *spt UNUSED) {
 bool
 supplemental_page_table_copy (struct hash *dst UNUSED,
 		struct hash *src UNUSED) {
-}
+	// struct hash_iterator i;
+	
+	// hash_first (&i, src);
+	// while (hash_next (&i))
+	// {
+	// 	struct page *p = hash_entry (hash_cur (&i), struct page, hash_elem);
+	// 	struct page *new_page = calloc(sizeof(struct page),1);
+	// 	if (p->frame) {
+	// 		void *va = (void *) (((uint64_t) pml4_index << PML4SHIFT) |
+	// 							 ((uint64_t) pdp_index << PDPESHIFT) |
+	// 							 ((uint64_t) pdx_index << PDXSHIFT) |
+	// 							 ((uint64_t) i << PTXSHIFT));
+	// 		if (!func (p, va, aux))
+	// 			return false;
+	// 	}
 
+	// }
+}
+void kill_func (struct hash_elem *e, void *aux){
+	struct page *page = hash_entry(e,struct page, hash_elem);
+	vm_dealloc_page(page);
+}
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct hash *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	hash_clear(spt,kill_func);
 }

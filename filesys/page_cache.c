@@ -13,7 +13,7 @@ static const struct page_operations page_cache_op = {
 	.type = VM_PAGE_CACHE,
 };
 
-tid_t page_cache_workerd;
+int page_cache_workerd;
 
 /* The initializer of file vm */
 void

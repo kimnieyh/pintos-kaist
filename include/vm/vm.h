@@ -3,6 +3,9 @@
 #include <stdbool.h>
 #include "threads/palloc.h"
 #include "kernel/hash.h"
+#include "threads/vaddr.h"
+#include "userprog/process.h"
+#include "lib/round.h"
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
@@ -60,7 +63,11 @@ struct page {
 #endif
 	};
 };
-
+struct file_info{
+	struct file *file;
+	size_t bytes;
+	off_t offset;
+};
 /* The representation of "frame" */
 struct frame {
 	void *kva;

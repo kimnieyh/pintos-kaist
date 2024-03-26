@@ -22,12 +22,11 @@
 #ifdef VM
 #include "vm/vm.h"
 #endif
-
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
-struct thread * find_child(tid_t child_tid);
+struct thread * find_child(int child_tid);
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
@@ -39,10 +38,10 @@ process_init (void) {
  * before process_create_initd() returns. Returns the initd's
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
-tid_t
+int
 process_create_initd (const char *file_name) {
 	char *fn_copy;
-	tid_t tid;
+	int tid;
 	char **ptr;
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
@@ -73,12 +72,12 @@ initd (void *f_name) {
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
-tid_t
+int
 process_fork (const char *name, struct intr_frame *if_) {
 	/* Clone current thread to new thread.*/
 	struct thread *curr = thread_current();
 	memcpy(&curr->parent_if,if_,sizeof(struct intr_frame));
-	tid_t child_tid = thread_create (name,
+	int child_tid = thread_create (name,
 			PRI_DEFAULT, __do_fork, thread_current ());
 	struct thread *t = find_child(child_tid);
 	sema_down(&t->child_load_sema);
@@ -223,7 +222,7 @@ process_exec (void *f_name) {
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
-struct thread * find_child(tid_t child_tid){
+struct thread * find_child(int child_tid){
 	struct list_elem *e;
 	struct thread *t = thread_current();
 
@@ -238,7 +237,7 @@ struct thread * find_child(tid_t child_tid){
 }
 
 int
-process_wait (tid_t child_tid UNUSED) {
+process_wait (int child_tid UNUSED) {
 	struct thread * t = find_child(child_tid);
 	if(t==NULL) 
 		return -1;	
@@ -263,8 +262,8 @@ process_exit (void) {
 		close(i);
 	}
 	palloc_free_multiple(curr->files,FDT_PAGES);
-	file_close(curr->exec_file);
 	process_cleanup ();
+	file_close(curr->exec_file);
 	sema_up(&curr->wait_sema);
 	sema_down(&curr->exit_sema);
 }
@@ -592,7 +591,7 @@ static bool install_page (void *upage, void *kpage, bool writable);
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
-static bool
+bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
@@ -672,22 +671,30 @@ install_page (void *upage, void *kpage, bool writable) {
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
-struct file_info{
-	struct file *file;
-	size_t bytes;
-	off_t offset;
+/* An open file. */
+struct file {
+	struct inode *inode;        /* File's inode. */
+	off_t pos;                  /* Current position. */
+	bool deny_write;            /* Has file_deny_write() been called? */
 };
-static bool
+bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
 	// printf("[START] lazy_load_segment \n");
 	struct file_info *file_info = (struct file_info *)aux;
+	struct file *file = file_info->file;
 	struct frame *frame = page->frame;
-	file_seek(file_info->file,file_info->offset);
-	if(file_read(file_info->file,frame->kva,file_info->bytes)!= (int)file_info->bytes)
-		return false;
+	if(page->operations->type == VM_FILE){
+		page->file.file = file;
+	}
+	file_seek(file,file_info->offset);
+	int i;
+	if((i = file_read(file,frame->kva,file_info->bytes))!= (int)file_info->bytes)
+	{	
+		// printf("file_read fail {%d} , {%d} \n",file_info->bytes,i);
+		return false;}
 	memset((frame->kva)+(file_info->bytes),0,PGSIZE-(file_info->bytes));
 
 	// printf("[END] lazy_load_segment \n");
@@ -739,6 +746,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 					writable, lazy_load_segment, aux))
 		{	
 			// printf("[FAIL]load_segment.vm_alloc_page_with_initializer\n");
+			free(file_info);
 			return false;
 		}
 		/* Advance. */
@@ -756,7 +764,8 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-	vm_alloc_page(VM_ANON|IS_STACK,stack_bottom,true);
+	if(!vm_alloc_page(VM_ANON|IS_STACK,stack_bottom,false))
+		printf("[FAIL] vm_alloc_page\n");
 	if(!vm_claim_page(stack_bottom))
 	{
 		printf("[FAIL]setup_stack vm_claim_page\n");
