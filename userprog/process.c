@@ -689,6 +689,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	if(page->operations->type == VM_FILE){
 		page->file.file = file;
 		page->file.length = file_info->length;
+		page->file.offset = file_info->offset;
 	}
 	
 	file_seek(file,file_info->offset);

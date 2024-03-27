@@ -45,6 +45,16 @@ syscall_init (void) {
 	lock_init(&filesys_lock);
 }
 void check_addr(char* addr){
+	//세팅은 안됐지만, 페이지는 존재할 때 !!
+#ifdef VM
+	if(!is_user_vaddr(addr)){
+		exit(-1);}
+	struct page *page = spt_find_page(&thread_current()->spt,addr);
+	if(!page){
+		exit(-1);}
+	else
+		return;
+#endif
 	if(!is_user_vaddr(addr)|| !pml4_get_page(thread_current()->pml4,addr))
 		exit(-1); 
 }
@@ -210,8 +220,6 @@ void pos_update(struct file *file){
 	}
 }
 int read (int fd, void *buffer, unsigned length){
-	// printf("read start:%d\n",fd);
-
 	check_addr(buffer);
 	struct file *file = find_file_by_fd(fd);
 	int bytes_read = 0;
@@ -230,19 +238,20 @@ int read (int fd, void *buffer, unsigned length){
 			return -1;
 
 		lock_acquire(&filesys_lock);
+		// printf("file_read !!!!\n");
 		bytes_read = file_read(file,buffer,length);
+		// printf("file_read done!!!!%d\n",bytes_read);
 		lock_release(&filesys_lock);
 		pos_update(file);	
 	}
+	// printf("read done\n");
 	return bytes_read;
 }
 
 int write (int fd, const void *buffer, unsigned length){
-	// printf("write start\n");
 	check_addr(buffer);
 	struct file *file = find_file_by_fd(fd);
-	// printf("fd:%d\n",fd);
-	// printf("file:%d\n",file);
+
 	int byte_write = 0;
 	if (file == 2){ 
 		putbuf(buffer,length);
@@ -252,7 +261,6 @@ int write (int fd, const void *buffer, unsigned length){
 	{
 		if (file < 3)
 			return -1;
-
 		lock_acquire(&filesys_lock);
 		byte_write = file_write(file,buffer,length);
 		lock_release(&filesys_lock);

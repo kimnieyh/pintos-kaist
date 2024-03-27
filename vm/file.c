@@ -111,6 +111,8 @@ do_munmap (void *addr) {
 	struct page *page = spt_find_page(&t->spt,addr);
 	struct file *file = page->file.file;
 	int length = page->file.length;
+	struct inode *inode = file_get_inode(file);
+	inode_write_at (inode,page->frame->kva,length,page->file.offset);
 	int page_cnt = ( length -1 ) / PGSIZE +1;
 	for (int i = 0 ; i < page_cnt ; i ++ ){
 		page = spt_find_page(&t->spt,addr+(PGSIZE * i));
