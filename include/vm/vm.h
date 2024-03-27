@@ -51,7 +51,6 @@ struct page {
 
 	/* Your implementation */
 	struct hash_elem hash_elem;
-	bool is_stack;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {

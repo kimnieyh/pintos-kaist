@@ -51,7 +51,6 @@ void check_addr(char* addr){
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
-
 	switch (f->R.rax)
 	{
 	case SYS_HALT:

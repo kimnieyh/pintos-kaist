@@ -37,7 +37,7 @@ bool
 file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &file_ops;
-	page->is_stack = type;
+	page->file.type = type;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -64,8 +64,16 @@ void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
 	// printf("[START]do_mmap!\n");
+
+	// 이미 할당된 페이지 인지 확인 
+	struct page check_p;
+	check_p.va = addr;
+	if(spt_find_page(&thread_current()->spt, &check_p))
+		return NULL;
+
 	size_t file_size = file_length(file);
 	uint32_t read_bytes, zero_bytes;
+
 	read_bytes = length > file_size ? offset + length : offset + file_size;
 	zero_bytes = (ROUND_UP (read_bytes, PGSIZE)
 								- read_bytes);
@@ -83,7 +91,7 @@ do_mmap (void *addr, size_t length, int writable,
 		if(!vm_alloc_page_with_initializer(VM_FILE, addr,
 					writable, lazy_load_segment,file_info))
 		{
-			printf("[FAIL] do_mmap.vm_alloc_page_with_initializer\n");
+			// printf("[FAIL] do_mmap.vm_alloc_page_with_initializer\n");
 			free(file_info);
 			return NULL;
 		}

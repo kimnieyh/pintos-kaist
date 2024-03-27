@@ -5,6 +5,7 @@
 #include "vm/inspect.h"
 #include "include/threads/vaddr.h"
 
+#define STACK_LIMIT 	(USER_STACK - (1 <<20))
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -152,7 +153,9 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	thread_current()->stack_bottom = addr;
 	vm_alloc_page(VM_ANON | IS_STACK, addr,true);
+
 	vm_claim_page(addr);
 }
 
@@ -167,12 +170,24 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct hash *spt UNUSED = &thread_current ()->spt;
 	struct page *page = spt_find_page(spt,addr);
+	// printf("rsp :%p, addr:%p\n",f->rsp,addr);
 	if(addr == NULL)
 		return false;
 	if(page == NULL)
+	{
+		void *rsp = f->rsp;
+
+		if((uint64_t)addr > STACK_LIMIT && USER_STACK > (uint64_t)addr && rsp - 8 <= addr)
+		{
+			// printf("stack_growth\n");
+			vm_stack_growth(thread_current()->stack_bottom - PGSIZE);
+			return true;
+		}
 		return false;
+	}
 	if(is_kernel_vaddr(addr)&&user)
-		return false;
+	{	
+		return false;}
 	
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */

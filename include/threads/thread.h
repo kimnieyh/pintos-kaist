@@ -114,6 +114,7 @@ struct thread {
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct hash spt;
+	void *stack_bottom;
 #endif
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
