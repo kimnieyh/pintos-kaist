@@ -174,7 +174,6 @@ __do_fork (void *aux) {
 	current->fd_idx = parent->fd_idx;
 	sema_up(&current->child_load_sema);
 	process_init ();
-
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret (&if_);

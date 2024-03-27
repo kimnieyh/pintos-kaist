@@ -243,28 +243,36 @@ supplemental_page_table_init (struct hash *spt UNUSED) {
 	}
 	// printf("[END] supplemental_page_table_init \n");
 }
-
+bool lazy_fork_load(struct page *page, void *aux) {
+	memcpy(page->frame->kva,aux,PGSIZE);
+	return true;
+}
+void hash_insert_new_func (struct hash_elem *e, void *aux){
+	// src -> dst 
+	struct hash* child_spt = (struct hash *)aux;
+	struct page* page = hash_entry(e,struct page, hash_elem);
+	
+	if(page->operations->type){
+		void *kva = page->frame->kva;
+		vm_alloc_page_with_initializer(page->operations->type,page->va,true,lazy_fork_load, kva);
+		// printf("type:%d ,  va:%p \n",page->operations->type,page->va);
+		vm_claim_page(page->va);
+	}else{
+		vm_alloc_page_with_initializer(page->uninit.type,page->va,true,page->uninit.init,page->uninit.aux);
+	}
+}
+void print (struct hash_elem *e, void *aux){
+	struct page* page = hash_entry(e,struct page, hash_elem);
+	// printf("page->va :%p page->type :%d \n",page->va,page->operations->type);
+}
 /* Copy supplemental page table from src to dst */
 bool
 supplemental_page_table_copy (struct hash *dst UNUSED,
 		struct hash *src UNUSED) {
-	// struct hash_iterator i;
-	
-	// hash_first (&i, src);
-	// while (hash_next (&i))
-	// {
-	// 	struct page *p = hash_entry (hash_cur (&i), struct page, hash_elem);
-	// 	struct page *new_page = calloc(sizeof(struct page),1);
-	// 	if (p->frame) {
-	// 		void *va = (void *) (((uint64_t) pml4_index << PML4SHIFT) |
-	// 							 ((uint64_t) pdp_index << PDPESHIFT) |
-	// 							 ((uint64_t) pdx_index << PDXSHIFT) |
-	// 							 ((uint64_t) i << PTXSHIFT));
-	// 		if (!func (p, va, aux))
-	// 			return false;
-	// 	}
-
-	// }
+	hash_apply(src,print);
+	src->aux = dst;
+	hash_apply(src,hash_insert_new_func);
+	return true;
 }
 void kill_func (struct hash_elem *e, void *aux){
 	struct page *page = hash_entry(e,struct page, hash_elem);
@@ -275,5 +283,6 @@ void
 supplemental_page_table_kill (struct hash *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
+	//알람 주석처리하고 확인...! 
 	hash_clear(spt,kill_func);
 }

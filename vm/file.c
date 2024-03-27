@@ -72,9 +72,9 @@ do_mmap (void *addr, size_t length, int writable,
 		return NULL;
 
 	size_t file_size = file_length(file);
-	uint32_t read_bytes, zero_bytes;
+	size_t read_bytes, zero_bytes;
 
-	read_bytes = length > file_size ? offset + length : offset + file_size;
+	read_bytes = length > file_size - offset ? length : file_size - offset;
 	zero_bytes = (ROUND_UP (read_bytes, PGSIZE)
 								- read_bytes);
 	
