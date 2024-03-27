@@ -67,6 +67,7 @@ struct file_info{
 	struct file *file;
 	size_t bytes;
 	off_t offset;
+	int length;
 };
 /* The representation of "frame" */
 struct frame {

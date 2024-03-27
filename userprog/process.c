@@ -686,16 +686,16 @@ lazy_load_segment (struct page *page, void *aux) {
 	struct file_info *file_info = (struct file_info *)aux;
 	struct file *file = file_info->file;
 	struct frame *frame = page->frame;
+	int file_size = file_length(file);
 	if(page->operations->type == VM_FILE){
 		page->file.file = file;
+		page->file.length = file_info->length;
 	}
+	
 	file_seek(file,file_info->offset);
-	int i;
-	if((i = file_read(file,frame->kva,file_info->bytes))!= (int)file_info->bytes)
-	{	
-		// printf("file_read fail {%d} , {%d} \n",file_info->bytes,i);
-		return false;}
-	memset((frame->kva)+(file_info->bytes),0,PGSIZE-(file_info->bytes));
+	int off_set = file_read(file,frame->kva,file_info->bytes);
+	
+	memset((frame->kva)+(off_set),0,PGSIZE-off_set);
 
 	// printf("[END] lazy_load_segment \n");
 	return true;
@@ -764,7 +764,8 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-	if(!vm_alloc_page(VM_ANON|IS_STACK,stack_bottom,false))
+	//todo writable 저장 필요 type에
+	if(!vm_alloc_page(VM_ANON|IS_STACK,stack_bottom,true))
 		printf("[FAIL] vm_alloc_page\n");
 	if(!vm_claim_page(stack_bottom))
 	{

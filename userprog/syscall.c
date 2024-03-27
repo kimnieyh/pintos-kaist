@@ -313,7 +313,7 @@ void *
 mmap (void *addr, size_t length, int writable, int fd, unsigned int offset) {
 	struct file *file = find_file_by_fd(fd);
 	struct file *new_file = file_duplicate(file);
-
+	
 	if( file < 3 ){
 		// printf("[FAIL]file < 3\n");
 		return NULL;}

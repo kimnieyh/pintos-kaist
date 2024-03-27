@@ -169,6 +169,8 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = spt_find_page(spt,addr);
 	if(addr == NULL)
 		return false;
+	if(page == NULL)
+		return false;
 	if(is_kernel_vaddr(addr)&&user)
 		return false;
 	
