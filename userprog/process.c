@@ -681,20 +681,28 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
-	// printf("[START] lazy_load_segment \n");
 	struct file_info *file_info = (struct file_info *)aux;
 	struct file *file = file_info->file;
 	struct frame *frame = page->frame;
 	int file_size = file_length(file);
-	if(page->operations->type == VM_FILE){
-		page->file.file = file;
-		page->file.length = file_info->length;
-		page->file.offset = file_info->offset;
+
+	switch (page->operations->type)
+	{
+		case VM_ANON:
+			if(!IS_WRITABLE(page->anon.type))
+				return false;
+			break;
+		case VM_FILE:
+			// if(!IS_WRITABLE(page->file.type))
+			// 	return false;
+			page->file.file = file;
+			page->file.length = file_info->length;
+			page->file.offset = file_info->offset;
+			break;
 	}
 	
 	file_seek(file,file_info->offset);
 	int off_set = file_read(file,frame->kva,file_info->bytes);
-	
 	memset((frame->kva)+(off_set),0,PGSIZE-off_set);
 
 	// printf("[END] lazy_load_segment \n");
@@ -740,9 +748,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		file_info->offset = ofs;
 		file_info->bytes = page_read_bytes;
 		void *aux = file_info;
+		enum vm_type type = VM_ANON;
+		if(writable){
+			type = VM_ANON | IS_WRITABLE;
+		}
 		// VM_ANON : 익명 페이지 -> 파일에서 데이터를 읽어오는 것이 아니라 
 		// 시스템이 관리하는 메모리 영역 
-		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
+		if (!vm_alloc_page_with_initializer (type, upage,
 					writable, lazy_load_segment, aux))
 		{	
 			// printf("[FAIL]load_segment.vm_alloc_page_with_initializer\n");

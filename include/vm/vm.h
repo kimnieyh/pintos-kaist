@@ -21,7 +21,7 @@ enum vm_type {
 	/* Auxillary bit flag marker for store information. You can add more
 	 * markers, until the value is fit in the int. */
 	IS_STACK = (1 << 3),
-	VM_MARKER_1 = (1 << 4),
+	IS_WRITABLE = (1 << 4),
 
 	/* DO NOT EXCEED THIS VALUE. */
 	VM_MARKER_END = (1 << 31),
@@ -36,7 +36,7 @@ enum vm_type {
 
 struct page_operations;
 struct thread;
-
+#define IS_WRITABLE(type) (((type) & ~8) & 9)
 #define IS_STACK(type) (((type) & ~7) & 8)
 #define VM_TYPE(type) ((type) & 7)
 
@@ -72,6 +72,7 @@ struct file_info{
 struct frame {
 	void *kva;
 	struct page *page;
+	struct list_elem elem;
 };
 
 /* The function table for page operations.

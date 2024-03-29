@@ -6,6 +6,7 @@
 #include "include/threads/vaddr.h"
 
 #define STACK_LIMIT 	(USER_STACK - (1 <<20))
+struct list frame_list;
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -16,6 +17,7 @@ vm_init (void) {
 	pagecache_init ();
 #endif
 	register_inspect_intr ();
+	list_init(&frame_list);
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
 }
@@ -106,7 +108,6 @@ spt_insert_page (struct hash *spt UNUSED,
 
 void
 spt_remove_page (struct hash *spt, struct page *page) {
-	//todo hash 테이블에서 지우는 것 추가 
 	hash_delete(spt,&page->hash_elem);
 	vm_dealloc_page (page);
 	return true;
@@ -116,19 +117,43 @@ spt_remove_page (struct hash *spt, struct page *page) {
 static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
-	 /* TODO: The policy for eviction is up to you. */
+	
+	struct thread *t = thread_current();
+
+	struct list_elem *e = list_begin(&frame_list);
+
+	for(e ; e != list_end(&frame_list); e = list_next(&frame_list)){
+		victim = list_entry(e,struct frame, elem);
+		// pte가 엑세스 된 경우
+		if(!pml4_is_accessed(t->pml4,victim->page->va)){
+			// 엑세스 되지 않은 pte는 바로 반환
+			return victim;
+		}
+	}
+
+	// 못 찾은 경우
+	for(e ; e != list_end(&frame_list); e = list_next(&frame_list)){
+		victim = list_entry(e,struct frame, elem);
+		// pte가 엑세스 된 경우
+		if(pml4_is_accessed(t->pml4,victim->page->va)){
+			break;
+		}
+	}
+	// 엑세스 비트를 0으로 변경
+	pml4_set_accessed(t->pml4,victim->page->va,0);
  
 	return victim;
 }
-
+  
 /* Evict one page and return the corresponding frame.
  * Return NULL on error.*/
 static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
-	/* TODO: swap out the victim and return the evicted frame. */
 
-	return NULL;
+	swap_out(victim->page);
+
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -140,13 +165,18 @@ vm_get_frame (void) {
 	struct frame *frame = calloc(sizeof(struct frame),1); 
 	frame->kva = palloc_get_page(PAL_ZERO | PAL_USER);
 	frame->page = NULL;
+	
+	if(frame->kva == NULL){
+		frame = vm_evict_frame();
+		frame->page = NULL;
+		return frame;
+	}
+	// frame list에 맨 끝에 넣음
+	list_push_back(&frame_list,&frame->elem);
+
+	frame->page = NULL;
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
-	if(frame->kva == NULL){
-		free(frame);
-		printf("[FAIL] vm_get_frame kva palloc fail\n"); 
-		PANIC("todo");
-	}
 	return frame;
 }
 
@@ -170,7 +200,6 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct hash *spt UNUSED = &thread_current ()->spt;
 	struct page *page = spt_find_page(spt,addr);
-	// printf("rsp :%p, addr:%p\n",f->rsp,addr);
 	if(addr == NULL)
 		return false;
 	if(page == NULL)
@@ -187,7 +216,26 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	}
 	if(is_kernel_vaddr(addr)&&user)
 	{	
+		printf("this is kernel_vaddr\n");
 		return false;}
+	// printf("page->operations->type:%d\n",page->operations->type);
+	switch (page->operations->type)
+	{
+		case VM_UNINIT:
+			if(IS_STACK(page->uninit.type))
+			{	
+				return false;}
+			break;
+		case VM_ANON:
+			if(IS_STACK(page->anon.type))
+				return false;
+			break;
+		case VM_FILE:
+			if(IS_STACK(page->file.type))
+				return false;
+			break;
+	}
+	
 	
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
@@ -224,7 +272,7 @@ vm_do_claim_page (struct page *page) {
 	frame->page = page;
 	page->frame = frame;
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
-	if(!pml4_set_page(t->pml4,page->va,frame->kva,true))
+	if(!pml4_set_page(t->pml4,page->va,frame->kva,IS_WRITABLE(page->uninit.type)))
 	{
 		printf("[FAIL]vm_do_claim_page pml4_set_page fail\n");
 	}
@@ -244,22 +292,33 @@ supplemental_page_table_init (struct hash *spt UNUSED) {
 	// printf("[END] supplemental_page_table_init \n");
 }
 bool lazy_fork_load(struct page *page, void *aux) {
-	memcpy(page->frame->kva,aux,PGSIZE);
+	struct page *src= (struct page*) aux;
+	memcpy(page->frame->kva,src->frame->kva,PGSIZE);
 	return true;
 }
+
 void hash_insert_new_func (struct hash_elem *e, void *aux){
 	// src -> dst 
 	struct hash* child_spt = (struct hash *)aux;
 	struct page* page = hash_entry(e,struct page, hash_elem);
-	
-	if(page->operations->type){
-		void *kva = page->frame->kva;
-		vm_alloc_page_with_initializer(page->operations->type,page->va,true,lazy_fork_load, kva);
-		// printf("type:%d ,  va:%p \n",page->operations->type,page->va);
+	switch (page->operations->type)
+	{
+	case VM_UNINIT:
+		vm_alloc_page_with_initializer(page->uninit.type,page->va,
+		IS_WRITABLE(page->uninit.type),page->uninit.init,page->uninit.aux);
+		break;
+	case VM_ANON:
+		vm_alloc_page_with_initializer(page->anon.type,page->va,
+		IS_WRITABLE(page->anon.type),lazy_fork_load, page);
 		vm_claim_page(page->va);
-	}else{
-		vm_alloc_page_with_initializer(page->uninit.type,page->va,true,page->uninit.init,page->uninit.aux);
+		break;
+	case VM_FILE:
+		vm_alloc_page_with_initializer(page->file.type,page->va,
+		IS_WRITABLE(page->file.type),lazy_fork_load, page);
+		vm_claim_page(page->va);
+		break;
 	}
+
 }
 void print (struct hash_elem *e, void *aux){
 	struct page* page = hash_entry(e,struct page, hash_elem);
@@ -283,6 +342,5 @@ void
 supplemental_page_table_kill (struct hash *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	//알람 주석처리하고 확인...! 
 	hash_clear(spt,kill_func);
 }
