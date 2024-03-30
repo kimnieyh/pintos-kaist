@@ -4,11 +4,25 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "include/threads/vaddr.h"
+#include "threads/mmu.h"
 
 #define STACK_LIMIT 	(USER_STACK - (1 <<20))
 struct list frame_list;
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
+void hash_print_func (struct hash_elem *e, void *aux){
+	struct page *p = hash_entry(e,struct page,hash_elem);
+	
+	printf("-------------------------------------------------------------\n");
+	printf("  %12p  |  %12p  |  12p    |  \n",p->va,p->frame);
+}
+void 
+print_spt(){ 
+	printf("       VA       |       KV       |        FILE      | writable \n");
+	hash_apply(&thread_current()->spt,hash_print_func);
+	printf("=============================================================\n");
+}
+
 void
 vm_init (void) {
 	vm_anon_init ();
@@ -68,6 +82,7 @@ bool
 			break;
 		case VM_FILE:
 			uninit_new(new_page,upage,init,type,aux,file_backed_initializer);
+			break;
 		}
 		
 		// 2.보조 페이지 테이블에 삽입
@@ -122,7 +137,7 @@ vm_get_victim (void) {
 
 	struct list_elem *e = list_begin(&frame_list);
 
-	for(e ; e != list_end(&frame_list); e = list_next(&frame_list)){
+	for(e ; e != list_end(&frame_list); e = list_next(e)){
 		victim = list_entry(e,struct frame, elem);
 		// pte가 엑세스 된 경우
 		if(!pml4_is_accessed(t->pml4,victim->page->va)){
@@ -132,7 +147,7 @@ vm_get_victim (void) {
 	}
 
 	// 못 찾은 경우
-	for(e ; e != list_end(&frame_list); e = list_next(&frame_list)){
+	for(e ; e != list_end(&frame_list); e = list_next(e)){
 		victim = list_entry(e,struct frame, elem);
 		// pte가 엑세스 된 경우
 		if(pml4_is_accessed(t->pml4,victim->page->va)){
@@ -152,7 +167,6 @@ vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 
 	swap_out(victim->page);
-
 	return victim;
 }
 
@@ -164,7 +178,6 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = calloc(sizeof(struct frame),1); 
 	frame->kva = palloc_get_page(PAL_ZERO | PAL_USER);
-	frame->page = NULL;
 	
 	if(frame->kva == NULL){
 		frame = vm_evict_frame();
@@ -184,7 +197,7 @@ vm_get_frame (void) {
 static void
 vm_stack_growth (void *addr UNUSED) {
 	thread_current()->stack_bottom = addr;
-	vm_alloc_page(VM_ANON | IS_STACK, addr,true);
+	vm_alloc_page(VM_ANON | IS_STACK |IS_WRITABLE, addr,true);
 
 	vm_claim_page(addr);
 }
@@ -198,6 +211,8 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+	// printf("[DBG] vm_try_handle_fault(): addr = %p, user = %d, write = %d, not_present = %d\n",
+	// 		addr, user, write, not_present); /////////////
 	struct hash *spt UNUSED = &thread_current ()->spt;
 	struct page *page = spt_find_page(spt,addr);
 	if(addr == NULL)
@@ -208,7 +223,6 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 
 		if((uint64_t)addr > STACK_LIMIT && USER_STACK > (uint64_t)addr && rsp - 8 <= addr)
 		{
-			// printf("stack_growth\n");
 			vm_stack_growth(thread_current()->stack_bottom - PGSIZE);
 			return true;
 		}
@@ -216,8 +230,9 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	}
 	if(is_kernel_vaddr(addr)&&user)
 	{	
-		printf("this is kernel_vaddr\n");
-		return false;}
+		// printf("this is kernel_vaddr\n");
+		return false;
+	}
 	// printf("page->operations->type:%d\n",page->operations->type);
 	switch (page->operations->type)
 	{
@@ -228,9 +243,13 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 			break;
 		case VM_ANON:
 			if(IS_STACK(page->anon.type))
+			{
+				// printf("[DBG] vm handler(): read-only stack?\n"); ////
 				return false;
+			}
 			break;
 		case VM_FILE:
+			// print_spt();
 			if(IS_STACK(page->file.type))
 				return false;
 			break;
@@ -268,14 +287,18 @@ vm_do_claim_page (struct page *page) {
 	// printf("[START]vm_do_claim_page\n");
 	struct frame *frame = vm_get_frame ();
 	struct thread *t = thread_current();
+	// printf("%p\n",page->va);
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	// printf("[DBG] do_claim_page(): pml4 set writable? %d\n", IS_WRITABLE(page->uninit.type)); ////
 	if(!pml4_set_page(t->pml4,page->va,frame->kva,IS_WRITABLE(page->uninit.type)))
 	{
 		printf("[FAIL]vm_do_claim_page pml4_set_page fail\n");
 	}
+	// printf("pml4_get_page:%p\n",pml4_get_page(t->pml4,page->va));
+	// printf("kva : %p\n",page->frame->kva);
 	// printf("[END] vm_do_claim_page\n");
 	return swap_in (page, frame->kva);
 }

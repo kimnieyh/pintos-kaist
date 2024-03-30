@@ -2,6 +2,7 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "lib/kernel/bitmap.h"
 
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;
@@ -68,6 +69,7 @@ anon_swap_in (struct page *page, void *kva) {
 /* Swap out the page by writing contents to the swap disk. */
 static bool
 anon_swap_out (struct page *page) {
+
 	struct anon_page *anon_page = &page->anon;
 	// 빈 swap slot 찾기
 	int page_no = bitmap_scan(swap_map,0,1,false);
@@ -80,9 +82,12 @@ anon_swap_out (struct page *page) {
 
 	// swap_map 셋팅
 	bitmap_set(swap_map, page_no, true);
+
 	//clear page
 	pml4_clear_page(thread_current()->pml4,page->va);
+
 	anon_page->swap_idx = page_no;
+
 	return true;
 }
 

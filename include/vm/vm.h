@@ -36,8 +36,10 @@ enum vm_type {
 
 struct page_operations;
 struct thread;
-#define IS_WRITABLE(type) (((type) & ~8) & 9)
-#define IS_STACK(type) (((type) & ~7) & 8)
+// #define IS_WRITABLE(type) (((type) & ~8) & 9)
+// #define IS_STACK(type) (((type) & ~7) & 8)
+#define IS_WRITABLE(type) ((type) & IS_WRITABLE)
+#define IS_STACK(type) ((type) & IS_STACK)
 #define VM_TYPE(type) ((type) & 7)
 
 /* The representation of "page".

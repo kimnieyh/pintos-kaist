@@ -685,26 +685,24 @@ lazy_load_segment (struct page *page, void *aux) {
 	struct file *file = file_info->file;
 	struct frame *frame = page->frame;
 	int file_size = file_length(file);
-
+	// printf("page->va:%p\n",page->va);
 	switch (page->operations->type)
 	{
 		case VM_ANON:
-			if(!IS_WRITABLE(page->anon.type))
-				return false;
 			break;
 		case VM_FILE:
-			// if(!IS_WRITABLE(page->file.type))
-			// 	return false;
 			page->file.file = file;
 			page->file.length = file_info->length;
 			page->file.offset = file_info->offset;
 			break;
 	}
-	
+	// printf("offset : %d\n",file_info->offset);
 	file_seek(file,file_info->offset);
-	int off_set = file_read(file,frame->kva,file_info->bytes);
+	int off_set = file_read(file,page->va,file_info->bytes);
+	// printf("off_set:%d\n",off_set);
+	// printf("PGSIZE-off_set:%d\n",PGSIZE-off_set);
 	memset((frame->kva)+(off_set),0,PGSIZE-off_set);
-
+	// print_spt();
 	// printf("[END] lazy_load_segment \n");
 	return true;
 }
@@ -729,7 +727,6 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	// printf("[START] load_segment start\n");
-	//load_segment (file, file_page, (void *) mem_page,read_bytes, zero_bytes, writable)
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
@@ -777,11 +774,12 @@ setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 	//todo writable 저장 필요 type에
-	if(!vm_alloc_page(VM_ANON|IS_STACK,stack_bottom,true))
-		printf("[FAIL] vm_alloc_page\n");
+	if(!vm_alloc_page(VM_ANON|IS_STACK|IS_WRITABLE,stack_bottom,true)){
+		// printf("[FAIL] vm_alloc_page\n");
+	}
 	if(!vm_claim_page(stack_bottom))
 	{
-		printf("[FAIL]setup_stack vm_claim_page\n");
+		// printf("[FAIL]setup_stack vm_claim_page\n");
 		return false;
 	}
 	if_->rsp = USER_STACK;
