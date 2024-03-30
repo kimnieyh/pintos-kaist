@@ -745,10 +745,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		file_info->offset = ofs;
 		file_info->bytes = page_read_bytes;
 		void *aux = file_info;
-		enum vm_type type = VM_ANON;
-		if(writable){
-			type = VM_ANON | IS_WRITABLE;
-		}
+		enum vm_type type = writable ? (VM_ANON | IS_WRITABLE) : VM_ANON;
 		// VM_ANON : 익명 페이지 -> 파일에서 데이터를 읽어오는 것이 아니라 
 		// 시스템이 관리하는 메모리 영역 
 		if (!vm_alloc_page_with_initializer (type, upage,

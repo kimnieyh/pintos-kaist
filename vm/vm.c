@@ -242,7 +242,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 				return false;}
 			break;
 		case VM_ANON:
-			if(IS_STACK(page->anon.type))
+			if(IS_STACK(page->anon.type) || (!IS_WRITABLE(page->anon.type)&& write))
 			{
 				// printf("[DBG] vm handler(): read-only stack?\n"); ////
 				return false;
@@ -250,7 +250,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 			break;
 		case VM_FILE:
 			// print_spt();
-			if(IS_STACK(page->file.type))
+			if(IS_STACK(page->file.type)|| (!IS_WRITABLE(page->file.type)&& write))
 				return false;
 			break;
 	}

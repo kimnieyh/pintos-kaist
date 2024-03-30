@@ -125,6 +125,7 @@ do_mmap (void *addr, size_t length, int writable,
 		file_size -= file_read_bytes;
 		addr += PGSIZE;
 	}
+
 	return ret;
 }
 
@@ -136,8 +137,7 @@ do_munmap (void *addr) {
 	struct page *page = spt_find_page(&t->spt,addr);
 	struct file *file = page->file.file;
 	int length = page->file.length;
-	printf("page.type :%d  |",page->operations->type);
-	printf("page.file.type :%d\n",page->file.type);
+
 	if(IS_WRITABLE(page->file.type))
 	{	
 		struct inode *inode = file_get_inode(file);
