@@ -234,12 +234,14 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		return false;
 	}
 	// printf("page->operations->type:%d\n",page->operations->type);
+	// printf("IS_WRITABLE(page->anon.type):%d\n",IS_WRITABLE(page->anon.type));
 	switch (page->operations->type)
 	{
 		case VM_UNINIT:
-			if(IS_STACK(page->uninit.type))
+			if(IS_STACK(page->uninit.type)|| (!IS_WRITABLE(page->uninit.type)&& write))
 			{	
-				return false;}
+				return false;
+			}
 			break;
 		case VM_ANON:
 			if(IS_STACK(page->anon.type) || (!IS_WRITABLE(page->anon.type)&& write))

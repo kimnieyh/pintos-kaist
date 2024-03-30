@@ -52,11 +52,37 @@ void check_addr(char* addr){
 	struct page *page = spt_find_page(&thread_current()->spt,addr);
 	if(!page){
 		exit(-1);}
-	else
-		return;
+	else{
+		return;	
+	}
+	
 #endif
 	if(!is_user_vaddr(addr)|| !pml4_get_page(thread_current()->pml4,addr))
 		exit(-1); 
+}
+
+void check_page(char * addr){
+	#ifdef VM
+	struct page *page = spt_find_page(&thread_current()->spt,addr);
+	if(page ==NULL)
+		exit(-1);
+
+	switch (page->operations->type)
+	{
+	case VM_UNINIT:
+		// if(!IS_WRITABLE(page->uninit.type))
+		// 	exit(-1);
+		break;
+	case VM_ANON:
+		if(!IS_WRITABLE(page->anon.type))
+			exit(-1);
+		break;
+	case VM_FILE:
+		if(!IS_WRITABLE(page->file.type))
+			exit(-1);
+		break;
+	}
+	#endif
 }
 /* The main system call interface */
 void
@@ -221,6 +247,7 @@ void pos_update(struct file *file){
 }
 int read (int fd, void *buffer, unsigned length){
 	check_addr(buffer);
+	check_page(buffer);
 	struct file *file = find_file_by_fd(fd);
 	int bytes_read = 0;
 	char *ptr = (char *)buffer;

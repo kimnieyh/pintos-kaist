@@ -115,7 +115,7 @@ do_mmap (void *addr, size_t length, int writable,
 		if(!vm_alloc_page_with_initializer(type, addr,
 					writable, lazy_load_segment,file_info))
 		{
-			printf("[FAIL] do_mmap.vm_alloc_page_with_initializer\n");
+			// printf("[FAIL] do_mmap.vm_alloc_page_with_initializer\n");
 			free(file_info);
 			return NULL;
 		}
