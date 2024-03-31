@@ -366,6 +366,9 @@ mmap (void *addr, size_t length, int writable, int fd, unsigned int offset) {
 	if(!is_user_vaddr(addr)){
 		return NULL;
 	}
+	if(pg_ofs(offset)) {
+		return NULL;
+	}
 
 	return do_mmap(addr,length,writable,new_file,offset);
 }

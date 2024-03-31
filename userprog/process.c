@@ -685,12 +685,14 @@ lazy_load_segment (struct page *page, void *aux) {
 	struct file *file = file_info->file;
 	struct frame *frame = page->frame;
 	int file_size = file_length(file);
-	// printf("page->va:%p\n",page->va);
+	
 	switch (page->operations->type)
 	{
 		case VM_ANON:
+			// printf("anon page load {%p}\n",page->va);
 			break;
 		case VM_FILE:
+			// printf("file page load {%p}\n",page->va);
 			page->file.file = file;
 			page->file.length = file_info->length;
 			page->file.offset = file_info->offset;

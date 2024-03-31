@@ -2,10 +2,11 @@
 
 #include "vm/vm.h"
 #include "threads/pte.h"
+#include "threads/vaddr.h"
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
-
+int i;
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations file_ops = {
@@ -18,7 +19,7 @@ static const struct page_operations file_ops = {
 /* The initializer of file vm */
 void
 vm_file_init (void) {
-
+	i = 0;
 }
 
 /* Initialize the file backed page */
@@ -33,25 +34,35 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 /* Swap in the page by read contents from the file. */
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
+	// printf("[START] file_backed_swap_in %p\n",page->va);
 	struct file_page *file_page UNUSED = &page->file;
 	void *addr = page->va;
-
+	// printf("addr : %p \n",addr);
 	struct file *file = file_page->file;
-	size_t length = file_length(file);
 	off_t offset = file_page->offset;
-	if(file_read_at(file,kva,length,offset)!= length){
+	// printf("offset : %d \n",offset);
+	// printf("file_size : %d \n",file_length(file));
+	size_t length = (file_length(file) - offset) > PGSIZE ? PGSIZE : (file_length(file) - offset);
+	int check;
+	i ++;
+	// printf("length :%d \n",length);
+	// printf("cnt : %d\n",i);
+	if((check = file_read_at(file,kva,length,offset))!= length){
+		printf("length : %d , check : %d \n",length,check);
 		PANIC("todo");
 		return false;
 	}
 	if(length < PGSIZE){
-		memset(kva+offset,0,PGSIZE-length);
+		memset(kva+length,0,PGSIZE-length);
 	}
+	// printf("[END] file_backed_swap_in %p\n",page->va);
 	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
+	// printf("[START] file_backed_swap_out %p\n",page->va);
 	struct file_page *file_page UNUSED = &page->file;
 	void *addr = page->va;
 	struct thread *t = thread_current();
@@ -63,11 +74,12 @@ file_backed_swap_out (struct page *page) {
 
 		file_write_at (file,page->frame->kva,length,page->file.offset);
 	}
-
+	list_remove(&page->frame->elem);
 	pml4_clear_page(t->pml4,addr);
+	
 	page->frame->page = NULL;
 	page->frame = NULL;
-
+	// printf("[END] file_backed_swap_out %p\n",page->va);
 	return true;
 }
 
@@ -75,6 +87,9 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	if (page->frame) {
+		file_backed_swap_out(page);
+	}
 }
 
 /* Do the mmap */
@@ -82,12 +97,15 @@ void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
 	// printf("[START]do_mmap!\n");
+	if( is_kernel_vaddr(addr) || addr == KERN_BASE - PGSIZE ){
+		return NULL;
+	}
 
 	// 이미 할당된 페이지 인지 확인 
-	struct page check_p;
-	check_p.va = addr;
-	if(spt_find_page(&thread_current()->spt, &check_p))
+	if(spt_find_page(&thread_current()->spt, addr))
+	{	
 		return NULL;
+	}
 
 	size_t file_size = file_length(file);
 	size_t read_bytes, zero_bytes;
@@ -100,7 +118,7 @@ do_mmap (void *addr, size_t length, int writable,
 	while ( read_bytes > 0 || zero_bytes > 0 ) {
 		// printf("file_size : %d\n",file_size);
 		// printf("addr : %p\n",addr);
-		// printf("offset :%d \n",offset);
+		// printf("offset :%d \n",offset); 
 		size_t page_read_bytes = read_bytes > PGSIZE ? PGSIZE : read_bytes;
 		size_t file_read_bytes = file_size > 0 ? file_size : 0;
 		file_read_bytes = file_size > PGSIZE ? PGSIZE : file_size;
@@ -110,12 +128,12 @@ do_mmap (void *addr, size_t length, int writable,
 		file_info->file = file;
 		file_info->offset = offset;
 		file_info->length = length;
-		// 실제 파일 바이트 
+		// 실제 파일 바이트
 		file_info->bytes = file_read_bytes;
 		if(!vm_alloc_page_with_initializer(type, addr,
 					writable, lazy_load_segment,file_info))
 		{
-			// printf("[FAIL] do_mmap.vm_alloc_page_with_initializer\n");
+			printf("[FAIL] do_mmap.vm_alloc_page_with_initializer\n");
 			free(file_info);
 			return NULL;
 		}
@@ -125,14 +143,14 @@ do_mmap (void *addr, size_t length, int writable,
 		file_size -= file_read_bytes;
 		addr += PGSIZE;
 	}
-
+	// printf("[END] do_mmap.\n");
 	return ret;
 }
 
 /* Do the munmap */
 void
 do_munmap (void *addr) {
-// 	printf("[START]do_munmap start\n");
+	// printf("[START]do_munmap start\n");
 	struct thread *t = thread_current();
 	struct page *page = spt_find_page(&t->spt,addr);
 	struct file *file = page->file.file;
@@ -140,8 +158,8 @@ do_munmap (void *addr) {
 
 	if(IS_WRITABLE(page->file.type))
 	{	
-		struct inode *inode = file_get_inode(file);
-		inode_write_at (inode,page->frame->kva,length,page->file.offset);
+		// printf("write before\n");
+		file_write_at (file,page->frame->kva,length,page->file.offset);
 	}	
 	
 	int page_cnt = ( length -1 ) / PGSIZE +1;

@@ -14,7 +14,7 @@ void hash_print_func (struct hash_elem *e, void *aux){
 	struct page *p = hash_entry(e,struct page,hash_elem);
 	
 	printf("-------------------------------------------------------------\n");
-	printf("  %12p  |  %12p  |  12p    |  \n",p->va,p->frame);
+	printf("  %12p  |  %12p  |         |  \n",p->va,p->frame);
 }
 void 
 print_spt(){ 
@@ -135,28 +135,34 @@ vm_get_victim (void) {
 	
 	struct thread *t = thread_current();
 
-	struct list_elem *e = list_begin(&frame_list);
+	struct list_elem *e;
 
-	for(e ; e != list_end(&frame_list); e = list_next(e)){
+	for(e = list_begin(&frame_list) ; e != list_end(&frame_list); e = list_next(e)){
 		victim = list_entry(e,struct frame, elem);
 		// pte가 엑세스 된 경우
 		if(!pml4_is_accessed(t->pml4,victim->page->va)){
 			// 엑세스 되지 않은 pte는 바로 반환
+			list_remove(e);
 			return victim;
 		}
+		// printf("accessed va %p\n",victim->page->va);
 	}
-
+	
 	// 못 찾은 경우
-	for(e ; e != list_end(&frame_list); e = list_next(e)){
+	for(e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)){
 		victim = list_entry(e,struct frame, elem);
 		// pte가 엑세스 된 경우
+		// printf("victim->kva\n");
 		if(pml4_is_accessed(t->pml4,victim->page->va)){
+			// printf("22victim->kva\n");
 			break;
 		}
 	}
 	// 엑세스 비트를 0으로 변경
 	pml4_set_accessed(t->pml4,victim->page->va,0);
- 
+	
+	list_remove(e);
+	
 	return victim;
 }
   
@@ -165,7 +171,6 @@ vm_get_victim (void) {
 static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
-
 	swap_out(victim->page);
 	return victim;
 }
@@ -180,8 +185,10 @@ vm_get_frame (void) {
 	frame->kva = palloc_get_page(PAL_ZERO | PAL_USER);
 	
 	if(frame->kva == NULL){
+		free(frame);
 		frame = vm_evict_frame();
 		frame->page = NULL;
+		list_push_back(&frame_list,&frame->elem);
 		return frame;
 	}
 	// frame list에 맨 끝에 넣음
@@ -211,12 +218,14 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
-	// printf("[DBG] vm_try_handle_fault(): addr = %p, user = %d, write = %d, not_present = %d\n",
-	// 		addr, user, write, not_present); /////////////
+	
 	struct hash *spt UNUSED = &thread_current ()->spt;
 	struct page *page = spt_find_page(spt,addr);
+	// printf("[DBG] vm_try_handle_fault(): addr = %p, user = %d, write = %d, not_present = %d\n",
+	// 		addr, user, write, not_present); /////////////
 	if(addr == NULL)
 		return false;
+
 	if(page == NULL)
 	{
 		void *rsp = f->rsp;
@@ -226,11 +235,12 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 			vm_stack_growth(thread_current()->stack_bottom - PGSIZE);
 			return true;
 		}
+		// printf("stack_growth fail\n");
 		return false;
 	}
 	if(is_kernel_vaddr(addr)&&user)
 	{	
-		// printf("this is kernel_vaddr\n");
+		printf("this is kernel_vaddr\n");
 		return false;
 	}
 	// printf("page->operations->type:%d\n",page->operations->type);
@@ -244,7 +254,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 			}
 			break;
 		case VM_ANON:
-			if(IS_STACK(page->anon.type) || (!IS_WRITABLE(page->anon.type)&& write))
+			if((!IS_WRITABLE(page->anon.type)&& write))
 			{
 				// printf("[DBG] vm handler(): read-only stack?\n"); ////
 				return false;
