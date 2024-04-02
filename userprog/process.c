@@ -706,6 +706,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	memset((frame->kva)+(off_set),0,PGSIZE-off_set);
 	// print_spt();
 	// printf("[END] lazy_load_segment \n");
+	pml4_set_dirty(thread_current()->pml4,page->va,0);
 	return true;
 }
 

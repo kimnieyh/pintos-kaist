@@ -133,12 +133,14 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_DUP2:
 		f->R.rax = dup2(f->R.rdi,f->R.rsi);
 		break;
+#ifdef VM
 	case SYS_MMAP:
 		f->R.rax = (uint64_t)mmap(f->R.rdi,f->R.rsi,f->R.rdx,f->R.r10,f->R.r8);
 		break;
 	case SYS_MUNMAP:
 		munmap(f->R.rdi);
 		break;
+#endif
 	default:
 		break;
 	}
@@ -248,6 +250,7 @@ void pos_update(struct file *file){
 int read (int fd, void *buffer, unsigned length){
 	check_addr(buffer);
 	check_page(buffer);
+
 	struct file *file = find_file_by_fd(fd);
 	int bytes_read = 0;
 	char *ptr = (char *)buffer;
@@ -325,7 +328,7 @@ void close (int fd){
 int dup2(int oldfd, int newfd){
 	struct file *old_file = find_file_by_fd(oldfd);
 	struct file *new_file = find_file_by_fd(newfd);
-	// printf("old:%d, new:%d\n",oldfd,newfd);
+
 	if(old_file == NULL)
 		return -1;
 	if (old_file == new_file)
@@ -342,6 +345,8 @@ int dup2(int oldfd, int newfd){
 	}
 	return newfd;
 }
+
+#ifdef VM
 
 void *
 mmap (void *addr, size_t length, int writable, int fd, unsigned int offset) {
@@ -379,3 +384,5 @@ munmap (void *addr) {
 		return;
 	do_munmap(addr);
 }
+
+#endif

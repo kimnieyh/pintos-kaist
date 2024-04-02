@@ -5,7 +5,13 @@
 #include "kernel/hash.h"
 #include "threads/vaddr.h"
 #include "userprog/process.h"
+#include "threads/mmu.h"
 #include "lib/round.h"
+#include "threads/synch.h"
+
+struct list frame_list;
+struct lock frame_lock;
+
 enum vm_type {
 	/* page not initialized */
 	VM_UNINIT = 0,
