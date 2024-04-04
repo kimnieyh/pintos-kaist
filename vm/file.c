@@ -3,10 +3,11 @@
 #include "vm/vm.h"
 #include "threads/pte.h"
 #include "threads/vaddr.h"
+
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
 static void file_backed_destroy (struct page *page);
-int i;
+
 
 /* DO NOT MODIFY this struct */
 static const struct page_operations file_ops = {
@@ -19,7 +20,7 @@ static const struct page_operations file_ops = {
 /* The initializer of file vm */
 void
 vm_file_init (void) {
-	i = 0;
+
 }
 
 /* Initialize the file backed page */
@@ -44,14 +45,15 @@ file_backed_swap_in (struct page *page, void *kva) {
 	// printf("file_size : %d \n",file_length(file));
 	size_t length = (file_length(file) - offset) > PGSIZE ? PGSIZE : (file_length(file) - offset);
 	int check;
-	i ++;
-	// printf("length :%d \n",length);
-	// printf("cnt : %d\n",i);
+
+	lock_acquire(&filesys_lock);
 	if((check = file_read_at(file,kva,length,offset))!= length){
+		lock_release(&filesys_lock);
 		printf("length : %d , check : %d \n",length,check);
 		PANIC("todo");
 		return false;
 	}
+	lock_release(&filesys_lock);
 	if(length < PGSIZE){
 		memset(kva+length,0,PGSIZE-length);
 	}
@@ -71,10 +73,13 @@ file_backed_swap_out (struct page *page) {
 	{	
 		struct file *file = page->file.file;
 		int length = page->file.length;
-
+		lock_acquire(&filesys_lock);
 		file_write_at (file,page->frame->kva,length,page->file.offset);
+		lock_release(&filesys_lock);
 	}
+	lock_acquire(&filesys_lock);
 	list_remove(&page->frame->elem);
+	lock_release(&filesys_lock);
 	pml4_clear_page(t->pml4,addr);
 	
 	page->frame->page = NULL;
@@ -159,7 +164,9 @@ do_munmap (void *addr) {
 	if(IS_WRITABLE(page->file.type))
 	{	
 		// printf("write before\n");
+		lock_acquire(&filesys_lock);
 		file_write_at (file,page->frame->kva,length,page->file.offset);
+		lock_release(&filesys_lock);
 	}	
 	
 	int page_cnt = ( length -1 ) / PGSIZE +1;
@@ -170,6 +177,8 @@ do_munmap (void *addr) {
 		}
 		spt_remove_page(&t->spt,page);
 	}
+	lock_acquire(&filesys_lock);
 	file_close(file);
+	lock_release(&filesys_lock);
 	// printf("[END]do_munmap end\n");
 }

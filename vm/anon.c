@@ -51,22 +51,25 @@ anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
 	
 	int page_no = anon_page->swap_idx;
-
+	
+	lock_acquire(&swap_lock);
 	// 유효한 swap map 인지 확인
 	if(bitmap_test(swap_map,page_no) == false){
+		lock_release(&swap_lock);
 		return false;
 	}
+	lock_release(&swap_lock);
 
 	// 한 페이지의 sector의 개수만큼 sector에서 read
 	for (int i = 0 ; i < SECTORS_PER_PAGE ; i ++)
 	{
-		lock_acquire(&swap_lock);
 		disk_read(swap_disk, page_no * SECTORS_PER_PAGE + i , page->va + DISK_SECTOR_SIZE * i );
-		lock_release(&swap_lock);
 	}
 
 	// 사용 가능한 swap map으로 변경
+	lock_acquire(&swap_lock);
 	bitmap_set(swap_map,page_no,false);
+	lock_release(&swap_lock);
 	// printf("[END] anon_swap_in {%p}\n",page->va);
 	return true;
 }
@@ -83,13 +86,13 @@ anon_swap_out (struct page *page) {
 	// 한 페이지의 sector의 개수만큼 sector에 write
 	for (int i = 0 ; i < SECTORS_PER_PAGE ; i ++)
 	{
-		lock_acquire(&swap_lock);
 		disk_write(swap_disk, page_no * SECTORS_PER_PAGE + i , page->va + DISK_SECTOR_SIZE * i );
-		lock_release(&swap_lock);
 	}
 
 	// swap_map 셋팅
+	lock_acquire(&swap_lock);
 	bitmap_set(swap_map, page_no, true);
+	lock_release(&swap_lock);
 
 	//clear page
 	pml4_clear_page(thread_current()->pml4,page->va);

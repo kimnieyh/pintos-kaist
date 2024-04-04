@@ -3,7 +3,7 @@
 
 #include <list.h>
 #include <stdbool.h>
-
+struct lock filesys_lock;
 /* A counting semaphore. */
 struct semaphore {
 	unsigned value;             /* Current value. */

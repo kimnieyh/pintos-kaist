@@ -8,6 +8,7 @@
 
 #define STACK_LIMIT 	(USER_STACK - (1 <<20))
 struct list frame_list;
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void hash_print_func (struct hash_elem *e, void *aux){
@@ -137,24 +138,22 @@ vm_get_victim (void) {
 
 	struct list_elem *e;
 
-	for(e = list_begin(&frame_list) ; e != list_end(&frame_list); e = list_next(e)){
-		victim = list_entry(e,struct frame, elem);
-		// pte가 엑세스 된 경우
-		if(!pml4_is_accessed(t->pml4,victim->page->va)){
-			// 엑세스 되지 않은 pte는 바로 반환
-			list_remove(e);
-			return victim;
-		}
-		// printf("accessed va %p\n",victim->page->va);
-	}
+	// for(e = list_begin(&frame_list) ; e != list_end(&frame_list); e = list_next(e)){
+	// 	victim = list_entry(e,struct frame, elem);
+	// 	// pte가 엑세스 된 경우
+	// 	if(!pml4_is_accessed(t->pml4,victim->page->va)){
+	// 		// 엑세스 되지 않은 pte는 바로 반환
+	// 		list_remove(e);
+	// 		return victim;
+	// 	}
+	// 	// printf("accessed va %p\n",victim->page->va);
+	// }
 	
 	// 못 찾은 경우
 	for(e = list_begin(&frame_list); e != list_end(&frame_list); e = list_next(e)){
 		victim = list_entry(e,struct frame, elem);
 		// pte가 엑세스 된 경우
-		// printf("victim->kva\n");
 		if(pml4_is_accessed(t->pml4,victim->page->va)){
-			// printf("22victim->kva\n");
 			break;
 		}
 	}
@@ -187,9 +186,6 @@ vm_get_frame (void) {
 	if(frame->kva == NULL){
 		free(frame);
 		frame = vm_evict_frame();
-		frame->page = NULL;
-		list_push_back(&frame_list,&frame->elem);
-		return frame;
 	}
 	// frame list에 맨 끝에 넣음
 	list_push_back(&frame_list,&frame->elem);
